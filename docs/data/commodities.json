@@ -1,0 +1,265 @@
+import { useState, useMemo } from "react";
+import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+
+const COMMS = {
+  "Phosphorus yellow": { color: "#3B82F6", s: 27000, v: 0.45, tr: 0.018, sd: 42 },
+  "Urea":              { color: "#10B981", s: 2000,  v: 0.65, tr: -0.012, sd: 13 },
+  "Phosphoric acid":   { color: "#F97316", s: 3800,  v: 0.35, tr: 0.025,  sd: 77 },
+  "Sulfuric acid":     { color: "#A855F7", s: 420,   v: 0.55, tr: 0.008,  sd: 99 },
+  "Hydrochloric acid": { color: "#EF4444", s: 180,   v: 0.80, tr: -0.015, sd: 55 },
+};
+const SHORT = { "Phosphorus yellow":"P.Yellow","Urea":"Urea","Phosphoric acid":"P.Acid","Sulfuric acid":"S.Acid","Hydrochloric acid":"HCl" };
+const ALL   = Object.keys(COMMS);
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const TABS   = ["Overview","Performance","Volatility","Correlation","Seasonality","Signals"];
+const ICONS  = { Overview:"📈", Performance:"🎯", Volatility:"📊", Correlation:"🔗", Seasonality:"🌿", Signals:"⚡" };
+
+// ── Data generation ───────────────────────────────────────────────────────────
+function rng(seed) { let s=seed; return ()=>{ s=(s*9301+49297)%233280; return s/233280 }; }
+function genDates() {
+  const d=[], cur=new Date("2024-01-01"), end=new Date("2026-07-01");
+  while(cur<end){ if(cur.getDay()!==0&&cur.getDay()!==6) d.push(cur.toISOString().slice(0,10)); cur.setDate(cur.getDate()+1); }
+  return d;
+}
+function genP(n,{s,v,tr,sd}) {
+  const r=rng(sd), p=[s];
+  for(let i=1;i<n;i++) p.push(Math.max(p[i-1]*(1+(tr+(r()-0.48)*v)/100), s*0.3));
+  return p.map(x=>Math.round(x*10)/10);
+}
+
+const DATES  = genDates();
+const N      = DATES.length;
+const PRICES = Object.fromEntries(ALL.map(c=>[c, genP(N, COMMS[c])]));
+
+// ── Maths ─────────────────────────────────────────────────────────────────────
+const rets  = p => p.map((v,i)=>i===0?0:(v-p[i-1])/p[i-1]*100);
+const rStd  = (a,w=30) => a.map((_,i)=>{ if(i<w)return null; const s=a.slice(i-w,i),m=s.reduce((a,b)=>a+b)/w; return Math.sqrt(s.reduce((a,b)=>a+(b-m)**2)/w); });
+const pearson = (x,y) => { const n=x.length,mx=x.reduce((a,b)=>a+b)/n,my=y.reduce((a,b)=>a+b)/n,num=x.reduce((s,xi,i)=>s+(xi-mx)*(y[i]-my),0),den=Math.sqrt(x.reduce((s,xi)=>s+(xi-mx)**2)*y.reduce((s,yi)=>s+(yi-my)**2)); return den===0?0:+(num/den).toFixed(3); };
+const maArr = (p,w) => p.map((_,i)=>i<w-1?null: p.slice(i-w+1,i+1).reduce((a,b)=>a+b)/w);
+
+const ALL_R   = Object.fromEntries(ALL.map(c=>[c, rets(PRICES[c])]));
+const ALL_VOL = Object.fromEntries(ALL.map(c=>[c, rStd(ALL_R[c], 30)]));
+
+const fmt  = (n,d=0) => n==null?"—":n.toLocaleString("en-US",{minimumFractionDigits:d,maximumFractionDigits:d});
+const fpct = n => n==null?"—":(n>=0?"+":"")+n.toFixed(1)+"%";
+
+// ── Styles ────────────────────────────────────────────────────────────────────
+const D = { bg:"#0D1117", card:"#161B27", bd:"#2D3446", tx:"#E6EDF3", mu:"#8892B0", hv:"#1E2433" };
+
+// ── Thinned index for chart performance ───────────────────────────────────────
+const STEP  = Math.max(1, Math.floor(N/120));
+const TIDX  = Array.from({length:Math.ceil(N/STEP)},(_,i)=>Math.min(i*STEP,N-1));
+const TLBLS = TIDX.map(i=>DATES[i].slice(5));
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+function Card({label,value,sub,pos,style={}}) {
+  return (
+    <div style={{background:D.card,borderRadius:7,padding:"9px 11px",border:`0.5px solid ${D.bd}`,flex:1,minWidth:120,...style}}>
+      <div style={{fontSize:8,color:D.mu,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:3}}>{label}</div>
+      <div style={{fontSize:17,fontWeight:600,color:D.tx}}>{value}</div>
+      {sub&&<div style={{fontSize:9,marginTop:2,color:pos===true?"#10B981":pos===false?"#EF4444":D.mu}}>{sub}</div>}
+    </div>
+  );
+}
+
+const TT = ({active,payload,label}) => {
+  if(!active||!payload?.length) return null;
+  return (
+    <div style={{background:D.card,border:`0.5px solid ${D.bd}`,borderRadius:5,padding:"6px 10px"}}>
+      <div style={{fontSize:9,color:D.mu,marginBottom:4}}>{label}</div>
+      {payload.map((p,i)=>(
+        <div key={i} style={{fontSize:10,color:p.color,marginBottom:1,display:"flex",justifyContent:"space-between",gap:10}}>
+          <span>{p.name}</span><span style={{fontWeight:500}}>{typeof p.value==="number"?fmt(p.value,1):"—"}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+function CorrHeatmap({selected}) {
+  if(selected.length<2) return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:180,color:D.mu,fontSize:11}}>Select at least 2 commodities</div>;
+  const rs=Object.fromEntries(selected.map(c=>[c,ALL_R[c]]));
+  const cs=selected.map(a=>selected.map(b=>pearson(rs[a],rs[b])));
+  const sz=Math.min(80,Math.floor(380/selected.length));
+  const lw=80, W=lw+sz*selected.length, H=lw+sz*selected.length;
+  const clr=r=>r>=0?`rgba(59,130,246,${0.1+Math.abs(r)*0.85})`:`rgba(239,68,68,${0.1+Math.abs(r)*0.85})`;
+  return (
+    <svg width={W} height={H} style={{display:"block",margin:"0 auto"}}>
+      {selected.map((c,j)=>(
+        <text key={j} x={lw+j*sz+sz/2} y={lw-6} fontSize={8} fill={D.mu} textAnchor="middle"
+          transform={`rotate(-40,${lw+j*sz+sz/2},${lw-6})`}>{SHORT[c]||c.split(" ")[0]}</text>
+      ))}
+      {selected.map((c,i)=>(
+        <text key={i} x={lw-5} y={lw+i*sz+sz/2+3} fontSize={8} fill={D.mu} textAnchor="end">{SHORT[c]||c.split(" ")[0]}</text>
+      ))}
+      {cs.map((row,i)=>row.map((r,j)=>(
+        <g key={`${i}-${j}`}>
+          <rect x={lw+j*sz} y={lw+i*sz} width={sz-2} height={sz-2} fill={clr(r)} rx={3}/>
+          <text x={lw+j*sz+sz/2} y={lw+i*sz+sz/2+4} fontSize={10} fontWeight="600" fill="#fff" textAnchor="middle">{r.toFixed(2)}</text>
+        </g>
+      )))}
+    </svg>
+  );
+}
+
+const CP={cartesian:<CartesianGrid strokeDasharray="3 3" stroke="#2D3446"/>,tooltip:<Tooltip content={<TT/>}/>,legend:<Legend wrapperStyle={{fontSize:10,color:"#8892B0"}}/>,
+  xax:<XAxis dataKey="d" tick={{fontSize:8,fill:"#8892B0"}} tickLine={false} interval={60}/>,
+  yax:(fmt)=><YAxis tick={{fontSize:9,fill:"#8892B0"}} tickLine={false} axisLine={false} width={62} tickFormatter={fmt||undefined}/>,
+};
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+export default function App() {
+  const [sel, setSel]   = useState(["Phosphorus yellow","Urea","Phosphoric acid"]);
+  const [tab, setTab]   = useState("Overview");
+
+  const toggle = c => setSel(p=>p.includes(c)?(p.length>1?p.filter(x=>x!==c):p):[...p,c]);
+
+  // Chart datasets
+  const ovData = useMemo(()=>TIDX.map(i=>{ const r={d:DATES[i].slice(5)}; sel.forEach(c=>{r[c]=PRICES[c][i]}); return r; }),[sel]);
+  const pfData = useMemo(()=>TIDX.map(i=>{ const r={d:DATES[i].slice(5)}; sel.forEach(c=>{r[c]=+(PRICES[c][i]/PRICES[c][0]*100).toFixed(1)}); return r; }),[sel]);
+  const vlData = useMemo(()=>TIDX.map(i=>{ const r={d:DATES[i].slice(5)}; sel.forEach(c=>{r[c]=ALL_VOL[c][i]}); return r; }).filter(r=>sel.some(c=>r[c]!=null)),[sel]);
+  const snData = useMemo(()=>{ const bm=MONTHS.map(m=>({month:m})); sel.forEach(c=>{ const su=new Array(12).fill(0),co=new Array(12).fill(0); DATES.forEach((d,i)=>{const m=+d.slice(5,7)-1;su[m]+=PRICES[c][i];co[m]++}); bm.forEach((r,m)=>{r[c]=co[m]?+(su[m]/co[m]).toFixed(0):null}); }); return bm; },[sel]);
+  const sgData = useMemo(()=>{ const c=sel[0],p=PRICES[c],m20=maArr(p,20),m50=maArr(p,50); return TIDX.map(i=>({d:DATES[i].slice(5),Price:p[i],"MA 20":m20[i],"MA 50":m50[i]})); },[sel]);
+
+  const metrics = useMemo(()=>sel.map(c=>{ const p=PRICES[c],cur=p[N-1],prev=p[N-2],first=p[0]; return {name:c,cur,dc:(cur-prev)/prev*100,tr:(cur-first)/first*100}; }),[sel]);
+
+  const lastSg = sgData[sgData.length-1];
+  const isBuy  = (lastSg?.["MA 20"]??0)>(lastSg?.["MA 50"]??0);
+
+  return (
+    <div style={{background:D.bg,fontFamily:"system-ui,-apple-system,sans-serif",color:D.tx,display:"flex",flexDirection:"column",minHeight:480}}>
+
+      {/* Header */}
+      <div style={{background:D.card,borderBottom:`0.5px solid ${D.bd}`,padding:"7px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+        <div>
+          <div style={{fontWeight:700,fontSize:13}}>🧪 SunSirs Chemical Commodities Dashboard</div>
+          <div style={{fontSize:9,color:D.mu,marginTop:1}}>Jan 2024 – Jul 2026 · sunsirs.com · CNY/ton · Sample data for demo</div>
+        </div>
+        <div style={{fontSize:9,color:D.mu,background:D.hv,padding:"3px 8px",borderRadius:3,border:`0.5px solid ${D.bd}`}}>{N} trading days</div>
+      </div>
+
+      <div style={{display:"flex",flex:1,overflow:"hidden",minHeight:440}}>
+
+        {/* Sidebar */}
+        <div style={{width:172,background:D.card,borderRight:`0.5px solid ${D.bd}`,padding:"10px 8px",overflowY:"auto",flexShrink:0,fontSize:11}}>
+          <div style={{fontSize:8,color:D.mu,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:7}}>Select commodities</div>
+          {ALL.map(c=>{
+            const on=sel.includes(c),cfg=COMMS[c],m=metrics.find(x=>x.name===c);
+            return (
+              <div key={c} onClick={()=>toggle(c)}
+                style={{padding:"6px 7px",marginBottom:2,borderRadius:5,cursor:"pointer",background:on?D.hv:"transparent",border:`0.5px solid ${on?cfg.color+"50":"transparent"}`,userSelect:"none"}}>
+                <div style={{display:"flex",alignItems:"flex-start",gap:6}}>
+                  <div style={{width:8,height:8,borderRadius:2,background:on?cfg.color:"#2D3446",flexShrink:0,marginTop:2}}/>
+                  <div>
+                    <div style={{fontSize:10,color:on?D.tx:D.mu,lineHeight:1.3}}>{c}</div>
+                    {on&&m&&<div style={{fontSize:9,color:m.dc>=0?"#10B981":"#EF4444",marginTop:1}}>{fpct(m.dc)} today</div>}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          <div style={{margin:"10px 0",borderTop:`0.5px solid ${D.bd}`}}/>
+          <div style={{fontSize:8,color:D.mu,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:7}}>Analysis view</div>
+          {TABS.map(t=>(
+            <div key={t} onClick={()=>setTab(t)}
+              style={{padding:"5px 8px",marginBottom:1,borderRadius:4,cursor:"pointer",fontSize:10,color:tab===t?D.tx:D.mu,background:tab===t?D.bd:"transparent",fontWeight:tab===t?500:400}}>
+              {ICONS[t]} {t}
+            </div>
+          ))}
+        </div>
+
+        {/* Main */}
+        <div style={{flex:1,overflowY:"auto",padding:14}}>
+
+          {/* Metrics */}
+          <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:12}}>
+            {metrics.map(m=>(
+              <Card key={m.name} label={m.name} value={fmt(m.cur)} sub={`${fpct(m.dc)} today · ${fpct(m.tr)} total`} pos={m.dc>=0}/>
+            ))}
+          </div>
+
+          {/* Chart card */}
+          <div style={{background:D.card,borderRadius:9,border:`0.5px solid ${D.bd}`,padding:"12px 14px"}}>
+
+            {tab==="Overview"&&<>
+              <div style={{fontSize:11,fontWeight:600,color:D.mu,marginBottom:12}}>Price history (CNY/ton)</div>
+              <ResponsiveContainer width="100%" height={290}>
+                <LineChart data={ovData} margin={{top:4,right:12,bottom:4,left:4}}>
+                  {CP.cartesian}{CP.xax}{CP.yax(v=>v.toLocaleString())}{CP.tooltip}{CP.legend}
+                  {sel.map(c=><Line key={c} type="monotone" dataKey={c} stroke={COMMS[c].color} dot={false} strokeWidth={1.5}/>)}
+                </LineChart>
+              </ResponsiveContainer>
+            </>}
+
+            {tab==="Performance"&&<>
+              <div style={{fontSize:11,fontWeight:600,color:D.mu,marginBottom:4}}>Rebased price index (Jan 2024 = 100)</div>
+              <div style={{fontSize:9,color:D.mu,marginBottom:10}}>Resets all prices to 100 at series start — fair comparison across differently-priced commodities.</div>
+              <ResponsiveContainer width="100%" height={290}>
+                <LineChart data={pfData} margin={{top:4,right:12,bottom:4,left:4}}>
+                  {CP.cartesian}{CP.xax}{CP.yax()}{CP.tooltip}{CP.legend}
+                  {sel.map(c=><Line key={c} type="monotone" dataKey={c} stroke={COMMS[c].color} dot={false} strokeWidth={2}/>)}
+                </LineChart>
+              </ResponsiveContainer>
+            </>}
+
+            {tab==="Volatility"&&<>
+              <div style={{fontSize:11,fontWeight:600,color:D.mu,marginBottom:4}}>30-day rolling volatility (%)</div>
+              <div style={{fontSize:9,color:D.mu,marginBottom:10}}>Std dev of daily returns over 30-day window. Higher = more price risk.</div>
+              <ResponsiveContainer width="100%" height={290}>
+                <AreaChart data={vlData} margin={{top:4,right:12,bottom:4,left:4}}>
+                  {CP.cartesian}{CP.xax}{CP.yax(v=>v?.toFixed(2)+"%")}{CP.tooltip}{CP.legend}
+                  {sel.map(c=><Area key={c} type="monotone" dataKey={c} stroke={COMMS[c].color} fill={COMMS[c].color+"18"} dot={false} strokeWidth={1.5} connectNulls={false}/>)}
+                </AreaChart>
+              </ResponsiveContainer>
+            </>}
+
+            {tab==="Correlation"&&<>
+              <div style={{fontSize:11,fontWeight:600,color:D.mu,marginBottom:4}}>Return correlation matrix</div>
+              <div style={{fontSize:9,color:"#10B981",padding:"4px 8px",background:"#10B98110",borderRadius:3,border:"0.5px solid #10B98128",marginBottom:10}}>
+                ✓ Computed on daily returns — not price levels — to avoid spurious correlation from shared trends.
+              </div>
+              <CorrHeatmap selected={sel}/>
+            </>}
+
+            {tab==="Seasonality"&&<>
+              <div style={{fontSize:11,fontWeight:600,color:D.mu,marginBottom:4}}>Monthly seasonality pattern</div>
+              <div style={{fontSize:9,color:D.mu,marginBottom:10}}>Average price by calendar month across all available years. Reveals seasonal procurement windows.</div>
+              <ResponsiveContainer width="100%" height={290}>
+                <BarChart data={snData} margin={{top:4,right:12,bottom:4,left:4}}>
+                  {CP.cartesian}
+                  <XAxis dataKey="month" tick={{fontSize:8,fill:D.mu}} tickLine={false}/>
+                  {CP.yax(v=>v?.toLocaleString())}{CP.tooltip}{CP.legend}
+                  {sel.map(c=><Bar key={c} dataKey={c} fill={COMMS[c].color} opacity={0.85} radius={[2,2,0,0]}/>)}
+                </BarChart>
+              </ResponsiveContainer>
+            </>}
+
+            {tab==="Signals"&&<>
+              <div style={{fontSize:11,fontWeight:600,color:D.mu,marginBottom:4}}>⚡ Procurement signal — {sel[0]}</div>
+              <div style={{fontSize:9,color:"#F59E0B",padding:"4px 8px",background:"#F59E0B10",borderRadius:3,border:"0.5px solid #F59E0B28",marginBottom:10}}>
+                ⚠ Heuristic only — for procurement planning context. Validate with fundamental analysis before acting.
+              </div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+                <div style={{padding:"6px 14px",borderRadius:5,fontSize:12,fontWeight:700,background:isBuy?"#10B98118":"#EF444418",color:isBuy?"#10B981":"#EF4444",border:`1px solid ${isBuy?"#10B98140":"#EF444440"}`}}>
+                  {isBuy?"🟢 BUY — MA20 above MA50":"🔴 SELL — MA20 below MA50"}
+                </div>
+                <Card label="MA 20" value={fmt(lastSg?.["MA 20"])} style={{flex:"none",minWidth:0}}/>
+                <Card label="MA 50" value={fmt(lastSg?.["MA 50"])} style={{flex:"none",minWidth:0}}/>
+                <Card label="Current" value={fmt(lastSg?.Price)} style={{flex:"none",minWidth:0}}/>
+              </div>
+              <ResponsiveContainer width="100%" height={250}>
+                <LineChart data={sgData} margin={{top:4,right:12,bottom:4,left:4}}>
+                  {CP.cartesian}{CP.xax}{CP.yax(v=>v?.toLocaleString())}{CP.tooltip}{CP.legend}
+                  <Line type="monotone" dataKey="Price" stroke={COMMS[sel[0]].color} dot={false} strokeWidth={1} opacity={0.4}/>
+                  <Line type="monotone" dataKey="MA 20" stroke="#F59E0B" dot={false} strokeWidth={1.5} strokeDasharray="4 2"/>
+                  <Line type="monotone" dataKey="MA 50" stroke="#A855F7" dot={false} strokeWidth={2}/>
+                </LineChart>
+              </ResponsiveContainer>
+            </>}
+
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
