@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SunSirs Chemical Commodities Dashboard</title>
+<script src="https://cdn.plot.ly/plotly-2.29.0.min.js"></script>
+<style>
+:root{--bg:#0D1117;--card:#161B27;--bd:#2D3446;--tx:#E6EDF3;--mu:#8892B0;--hv:#1E2433;--gr:#10B981;--rd:#EF4444;--am:#F59E0B}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+#hdr{background:var(--card);border-bottom:.5px solid var(--bd);padding:9px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+#hdr .t{font-weight:700;font-size:14px}
+#hdr .s{font-size:10px;color:var(--mu);margin-top:2px}
+#wrap{display:flex;flex:1;overflow:hidden}
+#side{width:188px;background:var(--card);border-right:.5px solid var(--bd);padding:12px 10px;overflow-y:auto;flex-shrink:0;font-size:11px}
+.sl{font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;margin-top:4px}
+.ci{padding:7px 8px;margin-bottom:3px;border-radius:6px;cursor:pointer;border:.5px solid transparent;user-select:none;display:flex;align-items:center;gap:7px}
+.ci:hover{background:var(--hv)}
+.ci.on{background:var(--hv)}
+.cd{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+.cn{color:var(--mu);line-height:1.3}
+.ci.on .cn{color:var(--tx)}
+.cc{font-size:10px;margin-left:15px;margin-top:1px}
+hr{border:none;border-top:.5px solid var(--bd);margin:12px 0}
+.ti{padding:6px 8px;margin-bottom:2px;border-radius:5px;cursor:pointer;color:var(--mu)}
+.ti:hover{background:var(--hv)}
+.ti.on{background:var(--bd);color:var(--tx);font-weight:500}
+#main{flex:1;overflow-y:auto;padding:16px}
+#mrow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.mc{background:var(--card);border:.5px solid var(--bd);border-radius:8px;padding:10px 13px;flex:1;min-width:130px}
+.ml{font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px}
+.mv{font-size:17px;font-weight:600}
+.ms{font-size:10px;margin-top:2px}
+#ccard{background:var(--card);border:.5px solid var(--bd);border-radius:10px;padding:14px 16px}
+.ct{font-size:12px;font-weight:600;color:var(--mu);margin-bottom:5px}
+.cd2{font-size:10px;color:var(--mu);margin-bottom:12px}
+.note{font-size:10px;padding:5px 9px;border-radius:4px;margin-bottom:10px}
+.ng{background:#10B98112;border:.5px solid #10B98130;color:var(--gr)}
+.na{background:#F59E0B12;border:.5px solid #F59E0B30;color:var(--am)}
+.panel{display:none}
+.panel.on{display:block}
+#sb{display:inline-block;padding:7px 16px;border-radius:6px;font-size:13px;font-weight:700;margin-bottom:12px}
+.scards{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.load{display:flex;align-items:center;justify-content:center;height:300px;color:var(--mu);font-size:13px}
+</style>
+</head>
+<body>
+<div id="hdr">
+  <div><div class="t">🧪 SunSirs Chemical Commodities Dashboard</div><div class="s" id="hs">Loading…</div></div>
+  <div id="upd" style="font-size:10px;color:var(--mu);background:var(--hv);padding:3px 9px;border-radius:4px;border:.5px solid var(--bd)"></div>
+</div>
+<div id="wrap">
+  <div id="side">
+    <div class="sl">Select commodities</div>
+    <div id="clist"><div class="load" style="height:60px">…</div></div>
+    <hr>
+    <div class="sl">Analysis view</div>
+    <div id="tlist">
+      <div class="ti on" onclick="sw('ov',this)">📈 Overview</div>
+      <div class="ti" onclick="sw('pf',this)">🎯 Performance</div>
+      <div class="ti" onclick="sw('vl',this)">📊 Volatility</div>
+      <div class="ti" onclick="sw('cr',this)">🔗 Correlation</div>
+      <div class="ti" onclick="sw('sn',this)">🌿 Seasonality</div>
+      <div class="ti" onclick="sw('sg',this)">⚡ Signals</div>
+    </div>
+  </div>
+  <div id="main">
+    <div id="mrow"></div>
+    <div id="ccard">
+      <div class="load" id="ldmsg">⏳ Loading commodity data…</div>
+      <div id="ov" class="panel on">
+        <div class="ct">Price history (CNY/ton)</div>
+        <div id="ch-ov"></div>
+      </div>
+      <div id="pf" class="panel">
+        <div class="ct">Rebased price index (Jan 2024 = 100)</div>
+        <div class="cd2">Resets all prices to 100 at series start — fair comparison regardless of absolute price levels.</div>
+        <div id="ch-pf"></div>
+      </div>
+      <div id="vl" class="panel">
+        <div class="ct">30-day rolling volatility (%)</div>
+        <div class="cd2">Standard deviation of daily returns over a 30-day window. Higher = more price risk.</div>
+        <div id="ch-vl"></div>
+      </div>
+      <div id="cr" class="panel">
+        <div class="ct">Return correlation matrix</div>
+        <div class="note ng">✓ Computed on daily returns — not price levels — to avoid spurious correlation from shared trends.</div>
+        <div id="ch-cr"></div>
+      </div>
+      <div id="sn" class="panel">
+        <div class="ct">Monthly seasonality pattern</div>
+        <div class="cd2">Average price by calendar month. Reveals seasonal procurement windows.</div>
+        <div id="ch-sn"></div>
+      </div>
+      <div id="sg" class="panel">
+        <div class="ct" id="sgt">⚡ Procurement signal</div>
+        <div class="note na">⚠ Heuristic only — for procurement planning context. Validate with fundamental analysis.</div>
+        <div class="scards">
+          <div id="sb"></div>
+          <div class="mc" style="flex:none;min-width:0"><div class="ml">MA 20</div><div class="mv" id="sm20">—</div></div>
+          <div class="mc" style="flex:none;min-width:0"><div class="ml">MA 50</div><div class="mv" id="sm50">—</div></div>
+          <div class="mc" style="flex:none;min-width:0"><div class="ml">Current</div><div class="mv" id="scur">—</div></div>
+        </div>
+        <div id="ch-sg"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const COLS=["#3B82F6","#10B981","#F97316","#A855F7","#EF4444","#F59E0B","#06B6D4","#EC4899","#84CC16","#6366F1"];
+const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const LB={paper_bgcolor:"#161B27",plot_bgcolor:"#161B27",font:{color:"#8892B0",size:10,family:"system-ui"},margin:{t:10,r:16,b:38,l:70},xaxis:{gridcolor:"#2D3446",linecolor:"#2D3446",tickfont:{size:9}},yaxis:{gridcolor:"#2D3446",linecolor:"#2D3446",tickfont:{size:9}},legend:{bgcolor:"transparent",font:{size:10}},hovermode:"x unified",hoverlabel:{bgcolor:"#1E2433",bordercolor:"#2D3446",font:{size:10}}};
+const CFG={responsive:true,displayModeBar:false};
+
+let D=null,SEL=[],TAB="ov";
+const CC={};
+
+function fmt(n,d=0){return n==null?"—":n.toLocaleString("en-US",{minimumFractionDigits:d,maximumFractionDigits:d})}
+function pct(n){return n==null?"—":(n>=0?"+":"")+n.toFixed(1)+"%"}
+function rets(p){return p.map((v,i)=>i===0?0:(v-p[i-1])/p[i-1]*100)}
+function rStd(a,w=30){return a.map((_,i)=>{if(i<w)return null;const s=a.slice(i-w,i),m=s.reduce((x,y)=>x+y,0)/w;return Math.sqrt(s.reduce((x,y)=>x+(y-m)**2,0)/w)})}
+function pearson(x,y){const n=x.length,mx=x.reduce((a,b)=>a+b,0)/n,my=y.reduce((a,b)=>a+b,0)/n,num=x.reduce((s,xi,i)=>s+(xi-mx)*(y[i]-my),0),den=Math.sqrt(x.reduce((s,xi)=>s+(xi-mx)**2,0)*y.reduce((s,yi)=>s+(yi-my)**2,0));return den===0?0:num/den}
+function ma(p,w){return p.map((_,i)=>{if(i<w-1)return null;return p.slice(i-w+1,i+1).reduce((a,b)=>a+b,0)/w})}
+
+async function init(){
+  try{
+    const r=await fetch("data/commodities.json");
+    if(!r.ok)throw new Error("Cannot load data/commodities.json — run export_to_json.py first");
+    D=await r.json();
+    D.commodities.forEach((c,i)=>{CC[c]=COLS[i%COLS.length]});
+    SEL=D.commodities.slice(0,3);
+    document.getElementById("hs").textContent=`${D.meta.period_from} – ${D.meta.period_to} · ${D.meta.source} · ${D.meta.total_commodities} commodities`;
+    document.getElementById("upd").textContent=`Updated: ${D.meta.last_updated}`;
+    buildList();updateMetrics();
+    document.getElementById("ldmsg").style.display="none";
+    render();
+  }catch(e){document.getElementById("ldmsg").textContent="❌ "+e.message}
+}
+
+function buildList(){
+  const el=document.getElementById("clist");el.innerHTML="";
+  D.commodities.forEach(c=>{
+    const on=SEL.includes(c),m=getMetric(c);
+    const d=document.createElement("div");
+    d.className="ci"+(on?" on":"");
+    d.style.border=`.5px solid ${on?CC[c]+"50":"transparent"}`;
+    d.innerHTML=`<div class="cd" style="background:${on?CC[c]:"#2D3446"}"></div><div><div class="cn">${c}</div>${on&&m?`<div class="cc" style="color:${m.dc>=0?"#10B981":"#EF4444"}">${pct(m.dc)} today</div>`:""}</div>`;
+    d.onclick=()=>toggle(c);el.appendChild(d);
+  });
+}
+
+function getMetric(c){
+  const s=D.series[c],p=s.current_price,n=p.length;
+  if(!n)return null;
+  const cur=p[n-1],prev=p[n-2]??cur,first=p[0];
+  return{cur,dc:(cur-prev)/prev*100,tr:(cur-first)/first*100};
+}
+
+function updateMetrics(){
+  const el=document.getElementById("mrow");el.innerHTML="";
+  SEL.forEach(c=>{
+    const m=getMetric(c);if(!m)return;
+    const col=m.dc>=0?"#10B981":"#EF4444";
+    const d=document.createElement("div");d.className="mc";
+    d.innerHTML=`<div class="ml">${c}</div><div class="mv">${fmt(m.cur)}</div><div class="ms" style="color:${col}">${pct(m.dc)} today · ${pct(m.tr)} total</div>`;
+    el.appendChild(d);
+  });
+}
+
+function toggle(c){
+  SEL=SEL.includes(c)?(SEL.length>1?SEL.filter(x=>x!==c):SEL):[...SEL,c];
+  buildList();updateMetrics();render();
+}
+
+function sw(id,el){
+  document.querySelectorAll(".ti").forEach(t=>t.classList.remove("on"));
+  el.classList.add("on");TAB=id;
+  document.querySelectorAll(".panel").forEach(p=>p.classList.remove("on"));
+  document.getElementById(id).classList.add("on");
+  render();
+}
+
+function traces(){return SEL.map(c=>({x:D.series[c].dates,y:D.series[c].current_price,type:"scatter",mode:"lines",name:c,line:{color:CC[c],width:1.5}}))}
+
+function render(){
+  if(!D)return;
+  if(TAB==="ov")Plotly.react("ch-ov",traces(),{...LB,yaxis:{...LB.yaxis,title:"CNY/ton"},height:330},CFG);
+  if(TAB==="pf"){
+    const t=SEL.map(c=>{const p=D.series[c].current_price,f=p[0];return{x:D.series[c].dates,y:p.map(v=>+((v/f)*100).toFixed(2)),type:"scatter",mode:"lines",name:c,line:{color:CC[c],width:2}}});
+    Plotly.react("ch-pf",t,{...LB,yaxis:{...LB.yaxis,title:"Index (100=start)"},shapes:[{type:"line",x0:0,x1:1,xref:"paper",y0:100,y1:100,line:{color:"#2D3446",dash:"dot"}}],height:330},CFG);
+  }
+  if(TAB==="vl"){
+    const t=SEL.map(c=>{const p=D.series[c].current_price,v=rStd(rets(p),30);return{x:D.series[c].dates,y:v,type:"scatter",mode:"lines",name:c,fill:"tozeroy",line:{color:CC[c],width:1.5},fillcolor:CC[c]+"18"}});
+    Plotly.react("ch-vl",t,{...LB,yaxis:{...LB.yaxis,title:"Std of daily returns (%)"},height:330},CFG);
+  }
+  if(TAB==="cr"){
+    if(SEL.length<2){document.getElementById("ch-cr").innerHTML='<div class="load">Select at least 2 commodities</div>';return}
+    const rs=Object.fromEntries(SEL.map(c=>[c,rets(D.series[c].current_price)]));
+    const z=SEL.map(a=>SEL.map(b=>+pearson(rs[a],rs[b]).toFixed(3)));
+    const lb=SEL.map(c=>c.split(" ").slice(0,2).join(" "));
+    Plotly.react("ch-cr",[{type:"heatmap",z,x:lb,y:lb,colorscale:[[0,"#EF4444"],[0.5,"#161B27"],[1,"#3B82F6"]],zmin:-1,zmax:1,text:z.map(r=>r.map(v=>v.toFixed(2))),texttemplate:"<b>%{text}</b>",hovertemplate:"%{y} × %{x}: <b>%{z}</b><extra></extra>"}],{...LB,margin:{t:20,r:20,b:90,l:110},height:330},CFG);
+  }
+  if(TAB==="sn"){
+    const t=SEL.map(c=>{
+      const su=new Array(12).fill(0),co=new Array(12).fill(0);
+      D.series[c].dates.forEach((dt,i)=>{const m=+dt.slice(5,7)-1;su[m]+=D.series[c].current_price[i];co[m]++});
+      return{x:MONTHS,y:su.map((s,m)=>co[m]?+(s/co[m]).toFixed(0):null),type:"bar",name:c,marker:{color:CC[c],opacity:0.85}};
+    });
+    Plotly.react("ch-sn",t,{...LB,barmode:"group",yaxis:{...LB.yaxis,title:"Avg price (CNY/ton)"},height:330},CFG);
+  }
+  if(TAB==="sg"){
+    const c=SEL[0],p=D.series[c].current_price,dt=D.series[c].dates;
+    const m20=ma(p,20),m50=ma(p,50);
+    const lm20=m20[m20.length-1],lm50=m50[m50.length-1],lcur=p[p.length-1];
+    const buy=lm20>lm50;
+    document.getElementById("sgt").textContent=`⚡ Procurement signal — ${c}`;
+    document.getElementById("sm20").textContent=fmt(lm20);
+    document.getElementById("sm50").textContent=fmt(lm50);
+    document.getElementById("scur").textContent=fmt(lcur);
+    const sb=document.getElementById("sb");
+    sb.textContent=buy?"🟢 BUY — MA20 above MA50":"🔴 SELL — MA20 below MA50";
+    sb.style.cssText=`padding:7px 16px;border-radius:6px;font-size:13px;font-weight:700;display:inline-block;background:${buy?"#10B98118":"#EF444418"};color:${buy?"#10B981":"#EF4444"};border:1px solid ${buy?"#10B98140":"#EF444440"}`;
+    Plotly.react("ch-sg",[
+      {x:dt,y:p,type:"scatter",mode:"lines",name:c,line:{color:CC[c],width:1},opacity:0.4},
+      {x:dt,y:m20,type:"scatter",mode:"lines",name:"MA 20",line:{color:"#F59E0B",width:1.5,dash:"dot"}},
+      {x:dt,y:m50,type:"scatter",mode:"lines",name:"MA 50",line:{color:"#A855F7",width:2}},
+    ],{...LB,yaxis:{...LB.yaxis,title:"CNY/ton"},height:290},CFG);
+  }
+}
+
+init();
+</script>
+</body>
+</html>
