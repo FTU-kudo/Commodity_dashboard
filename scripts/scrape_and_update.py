@@ -18,11 +18,11 @@ from datetime import date, timedelta
 from bs4 import BeautifulSoup
 
 # ── Configuration ──────────────────────────────────────────────────────────────
-SERIES_START = date(2018, 1, 1)          # earliest date to ever scrape
+SERIES_START = date(2024, 1, 1)
 TODAY        = date.today()
 BASE_URL     = "https://sunsirs.com/uk/sdetail-day-{yyyy}-{mmdd}.html"
 JSON_PATH    = Path("docs/data/commodities.json")
-DELAY_MIN    = 1.5                        # seconds between requests
+DELAY_MIN    = 1.5
 DELAY_MAX    = 3.0
 MAX_RETRIES  = 3
 
@@ -41,15 +41,35 @@ SESSION.headers.update({
 
 # ── Load existing JSON ─────────────────────────────────────────────────────────
 def load_existing() -> dict:
+    """
+    Load existing commodities.json.
+    Handles three cases gracefully:
+      1. File does not exist  → start fresh
+      2. File is empty        → start fresh (fixes the .gitkeep empty-file bug)
+      3. File is corrupt JSON → start fresh with a warning
+    """
+    empty = {"meta": {}, "commodities": [], "sectors": {}, "series": {}}
+
     if not JSON_PATH.exists():
         print("No existing data — will scrape full series from scratch.")
-        return {"meta": {}, "commodities": [], "sectors": {}, "series": {}}
-    with open(JSON_PATH, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    n_comms = len(data.get("commodities", []))
-    period  = f"{data['meta'].get('period_from','')} → {data['meta'].get('period_to','')}"
-    print(f"Loaded existing data: {n_comms} commodities · {period}")
-    return data
+        return empty
+
+    # ── KEY FIX: handle empty file (caused by .gitkeep placeholder) ────────────
+    if JSON_PATH.stat().st_size == 0:
+        print("JSON file exists but is empty — starting fresh.")
+        return empty
+
+    try:
+        with open(JSON_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        n_comms = len(data.get("commodities", []))
+        period  = (f"{data['meta'].get('period_from', '')} → "
+                   f"{data['meta'].get('period_to', '')}")
+        print(f"Loaded existing data: {n_comms} commodities · {period}")
+        return data
+    except json.JSONDecodeError as e:
+        print(f"WARNING: JSON file is corrupted ({e}) — starting fresh.")
+        return empty
 
 # ── Find last scraped date ─────────────────────────────────────────────────────
 def get_last_date(data: dict) -> date | None:
@@ -104,7 +124,6 @@ def parse_day(html: str, d: date) -> list[dict]:
 
     if not headers and data_rows:
         headers = data_rows.pop(0)
-
     if len(headers) < 4:
         return []
 
@@ -143,7 +162,6 @@ def merge_records(data: dict, new_records: list[dict]) -> dict:
     series  = data.setdefault("series", {})
     sectors = data.setdefault("sectors", {})
 
-    # Group by commodity
     by_comm: dict[str, list[dict]] = {}
     for rec in new_records:
         comm = rec.get("Commodity", "").strip()
@@ -176,7 +194,6 @@ def merge_records(data: dict, new_records: list[dict]) -> dict:
             series[comm]["previous_price"].append(pp)
             series[comm]["sector"] = sectors.get(comm, "")
 
-        # Keep sorted by date
         triples = sorted(zip(
             series[comm]["dates"],
             series[comm]["current_price"],
@@ -231,7 +248,6 @@ def main():
         print(f"\nLast saved date : {last_date}")
         print(f"Scraping from   : {scrape_from} → {TODAY}")
 
-    # Only weekdays (SunSirs publishes Mon–Fri)
     dates_to_scrape = [
         d for d in date_range(scrape_from, TODAY)
         if d.weekday() < 5
@@ -239,7 +255,7 @@ def main():
 
     if not dates_to_scrape:
         print("\n✅  Already up to date — nothing to scrape!")
-        write_json(data)    # still write to refresh meta.last_updated
+        write_json(data)
         return
 
     print(f"\nScraping {len(dates_to_scrape)} new day(s)…\n")
@@ -262,24 +278,21 @@ def main():
                 print(f"  OK    {d}  ({len(records)} commodities)")
             else:
                 empty_days.append(str(d))
-                print(f"  EMPTY {d}  (holiday or no data)")
+                print(f"  EMPTY {d}")
 
         if i < len(dates_to_scrape) - 1:
             time.sleep(random.uniform(DELAY_MIN, DELAY_MAX))
 
-    # Merge and persist
     if all_new_records:
         print(f"\nMerging {len(all_new_records):,} new rows…")
         data = merge_records(data, all_new_records)
 
     write_json(data)
 
-    # Summary
     if empty_days:
         print(f"\n  No-data days  : {len(empty_days)}")
     if failed_days:
         print(f"\n  ⚠ Failed days : {', '.join(failed_days)}")
-        # Do NOT sys.exit(1) — partial data is better than a broken action
 
 
 if __name__ == "__main__":
