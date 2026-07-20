@@ -1,0 +1,57 @@
+# .github/workflows/daily_update.yml
+# =====================================
+# Runs every weekday at 16:30 Vietnam time (09:30 UTC).
+# Also triggerable manually from the GitHub Actions tab.
+#
+# What it does:
+#   1. Checks out the repo
+#   2. Installs Python dependencies
+#   3. Runs scripts/scrape_and_update.py
+#   4. Commits and pushes the updated commodities.json
+#   5. GitHub Pages auto-deploys the updated dashboard (~60s)
+
+name: Daily commodity data update
+
+on:
+  schedule:
+    # 09:30 UTC = 16:30 Vietnam (UTC+7), Monday–Friday
+    - cron: "30 9 * * 1-5"
+
+  # Allow manual trigger from the GitHub Actions tab (useful for first run)
+  workflow_dispatch:
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write   # needed to git commit + push
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          pip install requests beautifulsoup4 lxml
+
+      - name: Scrape new data and update JSON
+        run: |
+          python scripts/scrape_and_update.py
+
+      - name: Commit and push updated data
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/data/commodities.json
+          # Only commit if the file actually changed
+          git diff --staged --quiet \
+            && echo "No new data — nothing to commit." \
+            || git commit -m "data: auto-update $(date -u +%Y-%m-%d)"
+          git push
