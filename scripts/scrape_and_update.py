@@ -18,7 +18,7 @@ from datetime import date, timedelta
 from bs4 import BeautifulSoup
 
 # ── Configuration ──────────────────────────────────────────────────────────────
-SERIES_START = date(2024, 1, 1)
+SERIES_START = date(2018, 1, 1)
 TODAY        = date.today()
 BASE_URL     = "https://sunsirs.com/uk/sdetail-day-{yyyy}-{mmdd}.html"
 JSON_PATH    = Path("docs/data/commodities.json")
