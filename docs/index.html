@@ -1,39 +1,81 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SunSirs Chemical Commodities Dashboard</title>
 <script src="https://cdn.plot.ly/plotly-2.29.0.min.js"></script>
 <style>
-:root{--bg:#0D1117;--card:#161B27;--bd:#2D3446;--tx:#E6EDF3;--mu:#8892B0;--hv:#1E2433;--gr:#10B981;--rd:#EF4444;--am:#F59E0B}
+/* ── Theme variables ────────────────────────────────────────────────────────── */
+:root,[data-theme="dark"]{
+  --bg:#0D1117;--card:#161B27;--bd:#2D3446;--tx:#E6EDF3;
+  --mu:#8892B0;--hv:#1E2433;--gr:#10B981;--rd:#EF4444;--am:#F59E0B;
+  --plot-bg:#161B27;--plot-grid:#2D3446;--plot-font:#8892B0;
+  --hover-bg:#1E2433;--hover-bd:#2D3446;
+  --toggle-bg:#2D3446;--toggle-tx:#E6EDF3;
+}
+[data-theme="light"]{
+  --bg:#F0F4F8;--card:#FFFFFF;--bd:#E2E8F0;--tx:#1A202C;
+  --mu:#718096;--hv:#F7FAFC;--gr:#059669;--rd:#DC2626;--am:#D97706;
+  --plot-bg:#FFFFFF;--plot-grid:#E2E8F0;--plot-font:#718096;
+  --hover-bg:#FFFFFF;--hover-bd:#E2E8F0;
+  --toggle-bg:#E2E8F0;--toggle-tx:#1A202C;
+}
+/* ── Reset ──────────────────────────────────────────────────────────────────── */
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
-#hdr{background:var(--card);border-bottom:.5px solid var(--bd);padding:9px 18px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
-.ht{font-weight:700;font-size:14px}.hs{font-size:10px;color:var(--mu);margin-top:2px}
+body{background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,sans-serif;
+  height:100vh;display:flex;flex-direction:column;overflow:hidden;
+  transition:background .25s,color .25s}
+/* ── Header ─────────────────────────────────────────────────────────────────── */
+#hdr{background:var(--card);border-bottom:.5px solid var(--bd);
+  padding:9px 18px;display:flex;align-items:center;justify-content:space-between;
+  flex-shrink:0;transition:background .25s,border-color .25s}
+.ht{font-weight:700;font-size:14px}
+.hs{font-size:10px;color:var(--mu);margin-top:2px}
+#hdr-right{display:flex;align-items:center;gap:10px}
+#upd{font-size:10px;color:var(--mu);background:var(--hv);padding:3px 9px;
+  border-radius:4px;border:.5px solid var(--bd);transition:background .25s}
+/* ── Theme toggle button ─────────────────────────────────────────────────────── */
+#theme-btn{
+  background:var(--toggle-bg);color:var(--toggle-tx);
+  border:.5px solid var(--bd);border-radius:6px;
+  padding:4px 10px;font-size:12px;cursor:pointer;
+  display:flex;align-items:center;gap:5px;
+  transition:background .25s,border-color .25s;white-space:nowrap}
+#theme-btn:hover{border-color:var(--mu)}
+/* ── Layout ──────────────────────────────────────────────────────────────────── */
 #wrap{display:flex;flex:1;overflow:hidden;min-height:0}
-#side{width:192px;background:var(--card);border-right:.5px solid var(--bd);padding:12px 10px;overflow-y:auto;flex-shrink:0}
-.sl{font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;margin-top:2px}
-.ci{padding:7px 8px;margin-bottom:3px;border-radius:6px;cursor:pointer;border:.5px solid transparent;user-select:none;display:flex;align-items:flex-start;gap:7px}
+/* ── Sidebar ─────────────────────────────────────────────────────────────────── */
+#side{width:192px;background:var(--card);border-right:.5px solid var(--bd);
+  padding:12px 10px;overflow-y:auto;flex-shrink:0;
+  transition:background .25s,border-color .25s}
+.sl{font-size:9px;color:var(--mu);text-transform:uppercase;
+  letter-spacing:.07em;margin-bottom:8px;margin-top:2px}
+.ci{padding:7px 8px;margin-bottom:3px;border-radius:6px;cursor:pointer;
+  border:.5px solid transparent;user-select:none;display:flex;align-items:flex-start;gap:7px}
 .ci:hover,.ci.on{background:var(--hv)}.ci.on{border-color:var(--cc,transparent)}
 .cd{width:8px;height:8px;border-radius:2px;flex-shrink:0;margin-top:2px;background:var(--bd)}
 .ci.on .cd{background:var(--cc)}
 .cn{font-size:10.5px;color:var(--mu);line-height:1.3}.ci.on .cn{color:var(--tx)}
 .cc2{font-size:9px;margin-left:15px;margin-top:1px}
 hr.div{border:none;border-top:.5px solid var(--bd);margin:10px 0}
-.ti{padding:6px 8px;margin-bottom:2px;border-radius:5px;cursor:pointer;font-size:10.5px;color:var(--mu)}
+.ti{padding:6px 8px;margin-bottom:2px;border-radius:5px;cursor:pointer;
+  font-size:10.5px;color:var(--mu)}
 .ti:hover,.ti.on{background:var(--bd)}.ti.on{color:var(--tx);font-weight:500}
+/* ── Main content ────────────────────────────────────────────────────────────── */
 #main{flex:1;overflow-y:auto;padding:16px;min-width:0}
 #mrow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
-.mc{background:var(--card);border:.5px solid var(--bd);border-radius:8px;padding:10px 13px;flex:1;min-width:120px}
+.mc{background:var(--card);border:.5px solid var(--bd);border-radius:8px;
+  padding:10px 13px;flex:1;min-width:120px;transition:background .25s}
 .ml{font-size:8px;color:var(--mu);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px}
 .mv{font-size:17px;font-weight:600;color:var(--tx)}.ms{font-size:10px;margin-top:2px}
-#ccard{background:var(--card);border:.5px solid var(--bd);border-radius:10px;padding:14px 16px}
+#ccard{background:var(--card);border:.5px solid var(--bd);border-radius:10px;
+  padding:14px 16px;transition:background .25s}
 .ct{font-size:11px;font-weight:600;color:var(--mu);margin-bottom:5px}
 .cd2{font-size:10px;color:var(--mu);margin-bottom:12px}
 .note{font-size:10px;padding:5px 9px;border-radius:4px;margin-bottom:10px}
-.ng{background:#10B98112;border:.5px solid #10B98130;color:var(--gr)}
-.na{background:#F59E0B12;border:.5px solid #F59E0B30;color:var(--am)}
+.ng{background:rgba(16,185,129,.08);border:.5px solid rgba(16,185,129,.25);color:var(--gr)}
+.na{background:rgba(245,158,11,.08);border:.5px solid rgba(245,158,11,.25);color:var(--am)}
 .panel{display:none}.panel.on{display:block}
 #sb{display:inline-block;padding:7px 16px;border-radius:6px;font-size:13px;font-weight:700;margin-bottom:12px}
 .scards{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
@@ -47,7 +89,10 @@ hr.div{border:none;border-top:.5px solid var(--bd);margin:10px 0}
     <div class="ht">🧪 SunSirs Chemical Commodities Dashboard</div>
     <div class="hs" id="hs">Loading data…</div>
   </div>
-  <div id="upd" style="font-size:10px;color:var(--mu);background:var(--hv);padding:3px 9px;border-radius:4px;border:.5px solid var(--bd)"></div>
+  <div id="hdr-right">
+    <div id="upd"></div>
+    <button id="theme-btn" onclick="toggleTheme()">☀️ Light mode</button>
+  </div>
 </div>
 
 <div id="wrap">
@@ -73,31 +118,26 @@ hr.div{border:none;border-top:.5px solid var(--bd);margin:10px 0}
         <div class="ct">Price history (CNY/ton)</div>
         <div id="ch-ov"></div>
       </div>
-
       <div id="pf" class="panel">
         <div class="ct">Rebased price index (Jan 2024 = 100)</div>
         <div class="cd2">Resets all prices to 100 at series start — fair comparison regardless of absolute price levels.</div>
         <div id="ch-pf"></div>
       </div>
-
       <div id="vl" class="panel">
         <div class="ct">30-day rolling volatility (%)</div>
         <div class="cd2">Standard deviation of daily returns over a 30-day window. Higher = more price risk.</div>
         <div id="ch-vl"></div>
       </div>
-
       <div id="cr" class="panel">
         <div class="ct">Return correlation matrix</div>
         <div class="note ng">✓ Computed on daily returns — not price levels — to avoid spurious correlation from shared trends.</div>
         <div id="ch-cr"></div>
       </div>
-
       <div id="sn" class="panel">
         <div class="ct">Monthly seasonality pattern</div>
         <div class="cd2">Average price by calendar month. Reveals seasonal procurement windows.</div>
         <div id="ch-sn"></div>
       </div>
-
       <div id="sg" class="panel">
         <div class="ct" id="sgt">⚡ Procurement signal</div>
         <div class="note na">⚠ Heuristic only — for procurement planning context. Validate with fundamental analysis.</div>
@@ -114,61 +154,81 @@ hr.div{border:none;border-top:.5px solid var(--bd);margin:10px 0}
 </div>
 
 <script>
+/* ── Theme ──────────────────────────────────────────────────────────────────── */
+function getTheme(){return document.documentElement.getAttribute('data-theme')||'dark'}
+function setTheme(t){
+  document.documentElement.setAttribute('data-theme',t);
+  localStorage.setItem('theme',t);
+  const btn=document.getElementById('theme-btn');
+  btn.textContent=t==='dark'?'☀️ Light mode':'🌙 Dark mode';
+  if(window.D)render();
+}
+function toggleTheme(){setTheme(getTheme()==='dark'?'light':'dark')}
+// Restore saved preference
+setTheme(localStorage.getItem('theme')||'dark');
+
+/* ── Plotly layout (theme-aware) ─────────────────────────────────────────────── */
 const COLS=["#3B82F6","#10B981","#F97316","#A855F7","#EF4444","#F59E0B","#06B6D4","#EC4899","#84CC16","#6366F1"];
 const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-const LB={
-  paper_bgcolor:"#161B27",plot_bgcolor:"#161B27",
-  font:{color:"#8892B0",size:10,family:"system-ui"},
-  margin:{t:10,r:16,b:38,l:72},
-  xaxis:{gridcolor:"#2D3446",linecolor:"#2D3446",tickfont:{size:9}},
-  yaxis:{gridcolor:"#2D3446",linecolor:"#2D3446",tickfont:{size:9}},
-  legend:{bgcolor:"transparent",font:{size:10}},
-  hovermode:"x unified",
-  hoverlabel:{bgcolor:"#1E2433",bordercolor:"#2D3446",font:{size:10}},
-};
 const CFG={responsive:true,displayModeBar:false};
 
-let D=null, SEL=[], TAB="ov";
+function getLB(){
+  const light=getTheme()==='light';
+  return{
+    paper_bgcolor:light?'#FFFFFF':'#161B27',
+    plot_bgcolor :light?'#FFFFFF':'#161B27',
+    font:{color:light?'#718096':'#8892B0',size:10,family:'system-ui'},
+    margin:{t:10,r:16,b:38,l:72},
+    xaxis:{gridcolor:light?'#E2E8F0':'#2D3446',linecolor:light?'#E2E8F0':'#2D3446',tickfont:{size:9}},
+    yaxis:{gridcolor:light?'#E2E8F0':'#2D3446',linecolor:light?'#E2E8F0':'#2D3446',tickfont:{size:9}},
+    legend:{bgcolor:'transparent',font:{size:10}},
+    hovermode:'x unified',
+    hoverlabel:{bgcolor:light?'#FFFFFF':'#1E2433',bordercolor:light?'#E2E8F0':'#2D3446',font:{size:10}},
+  };
+}
+
+/* ── State ───────────────────────────────────────────────────────────────────── */
+let D=null, SEL=[], TAB='ov';
 const CC={};
 
-const fmt =(n,d=0)=>n==null?"—":n.toLocaleString("en-US",{minimumFractionDigits:d,maximumFractionDigits:d});
-const fpct=n=>n==null?"—":(n>=0?"+":"")+n.toFixed(1)+"%";
+const fmt =(n,d=0)=>n==null?'—':n.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+const fpct=n=>n==null?'—':(n>=0?'+':'')+n.toFixed(1)+'%';
 
 function rets(p){return p.map((v,i)=>i===0?0:(v-p[i-1])/p[i-1]*100)}
 function rStd(a,w=30){return a.map((_,i)=>{if(i<w)return null;const s=a.slice(i-w,i),m=s.reduce((a,b)=>a+b)/w;return Math.sqrt(s.reduce((a,b)=>a+(b-m)**2)/w)})}
 function pearson(x,y){const n=x.length,mx=x.reduce((a,b)=>a+b)/n,my=y.reduce((a,b)=>a+b)/n,num=x.reduce((s,xi,i)=>s+(xi-mx)*(y[i]-my),0),den=Math.sqrt(x.reduce((s,xi)=>s+(xi-mx)**2)*y.reduce((s,yi)=>s+(yi-my)**2));return den===0?0:num/den}
 function maArr(p,w){return p.map((_,i)=>i<w-1?null:p.slice(i-w+1,i+1).reduce((a,b)=>a+b)/w)}
 
-// ── Bootstrap ─────────────────────────────────────────────────────────────────
+/* ── Bootstrap ───────────────────────────────────────────────────────────────── */
 async function init(){
   try{
-    const r=await fetch("data/commodities.json");
+    const r=await fetch('data/commodities.json');
     if(!r.ok)throw new Error(`Cannot load data/commodities.json (${r.status}). Run the workflow first.`);
     D=await r.json();
     D.commodities.forEach((c,i)=>{CC[c]=COLS[i%COLS.length]});
     SEL=D.commodities.slice(0,3);
-    document.getElementById("hs").textContent=
+    document.getElementById('hs').textContent=
       `${D.meta.period_from} – ${D.meta.period_to} · ${D.meta.source} · ${D.meta.total_commodities} commodities`;
-    document.getElementById("upd").textContent=`Updated: ${D.meta.last_updated}`;
+    document.getElementById('upd').textContent=`Updated: ${D.meta.last_updated}`;
     buildList(); updateMetrics();
-    document.getElementById("ldmsg").style.display="none";
+    document.getElementById('ldmsg').style.display='none';
     render();
   }catch(e){
-    document.getElementById("ldmsg").textContent="❌ "+e.message;
+    document.getElementById('ldmsg').textContent='❌ '+e.message;
     console.error(e);
   }
 }
 
-// ── Sidebar ───────────────────────────────────────────────────────────────────
+/* ── Sidebar ─────────────────────────────────────────────────────────────────── */
 function buildList(){
-  const el=document.getElementById("clist");el.innerHTML="";
+  const el=document.getElementById('clist');el.innerHTML='';
   D.commodities.forEach(c=>{
     const on=SEL.includes(c),col=CC[c];
-    const d=document.createElement("div");
-    d.className="ci"+(on?" on":"");
-    d.style.setProperty("--cc",col);
+    const d=document.createElement('div');
+    d.className='ci'+(on?' on':'');
+    d.style.setProperty('--cc',col);
     const m=getMetric(c);
-    d.innerHTML=`<div class="cd"></div><div><div class="cn">${c}</div>${on&&m?`<div class="cc2" style="color:${m.dc>=0?"var(--gr)":"var(--rd)"}">${fpct(m.dc)} today</div>`:""}</div>`;
+    d.innerHTML=`<div class="cd"></div><div><div class="cn">${c}</div>${on&&m?`<div class="cc2" style="color:${m.dc>=0?'var(--gr)':'var(--rd)'}">${fpct(m.dc)} today</div>`:''}</div>`;
     d.onclick=()=>toggle(c);
     el.appendChild(d);
   });
@@ -179,7 +239,7 @@ function toggle(c){
   buildList(); updateMetrics(); render();
 }
 
-// ── Metrics row ───────────────────────────────────────────────────────────────
+/* ── Metrics row ─────────────────────────────────────────────────────────────── */
 function getMetric(c){
   const s=D.series[c],p=s.current_price,n=p.length;
   if(!n)return null;
@@ -188,27 +248,26 @@ function getMetric(c){
 }
 
 function updateMetrics(){
-  const el=document.getElementById("mrow");el.innerHTML="";
+  const el=document.getElementById('mrow');el.innerHTML='';
   SEL.forEach(c=>{
     const m=getMetric(c);if(!m)return;
-    const col=m.dc>=0?"var(--gr)":"var(--rd)";
-    const d=document.createElement("div");d.className="mc";
+    const col=m.dc>=0?'var(--gr)':'var(--rd)';
+    const d=document.createElement('div');d.className='mc';
     d.innerHTML=`<div class="ml">${c}</div><div class="mv">${fmt(m.cur)}</div><div class="ms" style="color:${col}">${fpct(m.dc)} today · ${fpct(m.tr)} total</div>`;
     el.appendChild(d);
   });
 }
 
-// ── Tab switching ─────────────────────────────────────────────────────────────
+/* ── Tab switching ───────────────────────────────────────────────────────────── */
 function sw(id,el){
-  document.querySelectorAll(".ti").forEach(t=>t.classList.remove("on"));el.classList.add("on");
-  document.querySelectorAll(".panel").forEach(p=>p.classList.remove("on"));document.getElementById(id).classList.add("on");
+  document.querySelectorAll('.ti').forEach(t=>t.classList.remove('on'));el.classList.add('on');
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('on'));document.getElementById(id).classList.add('on');
   TAB=id; render();
 }
 
-// ── Chart height helper ───────────────────────────────────────────────────────
 function h(){return Math.max(280,Math.floor(window.innerHeight*0.55))}
 
-// ── Render current tab ────────────────────────────────────────────────────────
+/* ── Render ──────────────────────────────────────────────────────────────────── */
 function render(){
   if(!D)return;
   const fns={ov:rOv,pf:rPf,vl:rVl,cr:rCr,sn:rSn,sg:rSg};
@@ -216,56 +275,56 @@ function render(){
 }
 
 function rOv(){
-  Plotly.react("ch-ov",SEL.map(c=>({
+  Plotly.react('ch-ov',SEL.map(c=>({
     x:D.series[c].dates,y:D.series[c].current_price,
-    type:"scatter",mode:"lines",name:c,line:{color:CC[c],width:1.5}
-  })),{...LB,yaxis:{...LB.yaxis,title:"CNY/ton"},height:h()},CFG);
+    type:'scatter',mode:'lines',name:c,line:{color:CC[c],width:1.5}
+  })),{...getLB(),yaxis:{...getLB().yaxis,title:'CNY/ton'},height:h()},CFG);
 }
 
 function rPf(){
-  Plotly.react("ch-pf",SEL.map(c=>{
+  Plotly.react('ch-pf',SEL.map(c=>{
     const p=D.series[c].current_price,f=p[0];
     return{x:D.series[c].dates,y:p.map(v=>+(v/f*100).toFixed(2)),
-      type:"scatter",mode:"lines",name:c,line:{color:CC[c],width:2}};
-  }),{...LB,
-    yaxis:{...LB.yaxis,title:"Index (100 = start)"},
-    shapes:[{type:"line",x0:0,x1:1,xref:"paper",y0:100,y1:100,line:{color:"#2D3446",dash:"dot"}}],
+      type:'scatter',mode:'lines',name:c,line:{color:CC[c],width:2}};
+  }),{...getLB(),
+    yaxis:{...getLB().yaxis,title:'Index (100 = start)'},
+    shapes:[{type:'line',x0:0,x1:1,xref:'paper',y0:100,y1:100,line:{color:'#2D3446',dash:'dot'}}],
     height:h()},CFG);
 }
 
 function rVl(){
-  Plotly.react("ch-vl",SEL.map(c=>{
+  Plotly.react('ch-vl',SEL.map(c=>{
     const v=rStd(rets(D.series[c].current_price),30);
-    return{x:D.series[c].dates,y:v,type:"scatter",mode:"lines",name:c,
-      fill:"tozeroy",line:{color:CC[c],width:1.5},fillcolor:CC[c]+"18"};
-  }),{...LB,yaxis:{...LB.yaxis,title:"Std of daily returns (%)"},height:h()},CFG);
+    return{x:D.series[c].dates,y:v,type:'scatter',mode:'lines',name:c,
+      fill:'tozeroy',line:{color:CC[c],width:1.5},fillcolor:CC[c]+'18'};
+  }),{...getLB(),yaxis:{...getLB().yaxis,title:'Std of daily returns (%)'},height:h()},CFG);
 }
 
 function rCr(){
   if(SEL.length<2){
-    document.getElementById("ch-cr").innerHTML='<div class="load">Select at least 2 commodities</div>';
+    document.getElementById('ch-cr').innerHTML='<div class="load">Select at least 2 commodities</div>';
     return;
   }
   const rs=Object.fromEntries(SEL.map(c=>[c,rets(D.series[c].current_price)]));
   const z=SEL.map(a=>SEL.map(b=>+pearson(rs[a],rs[b]).toFixed(3)));
-  const lb=SEL.map(c=>c.split(" ").slice(0,2).join(" "));
-  Plotly.react("ch-cr",[{
-    type:"heatmap",z,x:lb,y:lb,
-    colorscale:[[0,"#EF4444"],[0.5,"#161B27"],[1,"#3B82F6"]],
+  const lb=SEL.map(c=>c.split(' ').slice(0,2).join(' '));
+  Plotly.react('ch-cr',[{
+    type:'heatmap',z,x:lb,y:lb,
+    colorscale:[[0,'#EF4444'],[0.5,getTheme()==='light'?'#F7FAFC':'#161B27'],[1,'#3B82F6']],
     zmin:-1,zmax:1,
     text:z.map(r=>r.map(v=>v.toFixed(2))),
-    texttemplate:"<b>%{text}</b>",
-    hovertemplate:"%{y} × %{x}: <b>%{z}</b><extra></extra>",
-  }],{...LB,margin:{t:20,r:20,b:90,l:110},height:h()},CFG);
+    texttemplate:'<b>%{text}</b>',
+    hovertemplate:'%{y} × %{x}: <b>%{z}</b><extra></extra>',
+  }],{...getLB(),margin:{t:20,r:20,b:90,l:110},height:h()},CFG);
 }
 
 function rSn(){
-  Plotly.react("ch-sn",SEL.map(c=>{
+  Plotly.react('ch-sn',SEL.map(c=>{
     const su=new Array(12).fill(0),co=new Array(12).fill(0);
     D.series[c].dates.forEach((dt,i)=>{const m=+dt.slice(5,7)-1;su[m]+=D.series[c].current_price[i];co[m]++});
     return{x:MONTHS,y:su.map((s,m)=>co[m]?+(s/co[m]).toFixed(0):null),
-      type:"bar",name:c,marker:{color:CC[c],opacity:0.85}};
-  }),{...LB,barmode:"group",yaxis:{...LB.yaxis,title:"Avg price (CNY/ton)"},height:h()},CFG);
+      type:'bar',name:c,marker:{color:CC[c],opacity:0.85}};
+  }),{...getLB(),barmode:'group',yaxis:{...getLB().yaxis,title:'Avg price (CNY/ton)'},height:h()},CFG);
 }
 
 function rSg(){
@@ -273,23 +332,23 @@ function rSg(){
   const m20=maArr(p,20),m50=maArr(p,50);
   const lm20=m20[m20.length-1],lm50=m50[m50.length-1],lp=p[p.length-1];
   const buy=lm20>lm50;
-  document.getElementById("sgt").textContent=`⚡ Procurement signal — ${c}`;
-  document.getElementById("sm20").textContent=fmt(lm20);
-  document.getElementById("sm50").textContent=fmt(lm50);
-  document.getElementById("scur").textContent=fmt(lp);
-  const sb=document.getElementById("sb");
-  sb.textContent=buy?"🟢 BUY — MA20 above MA50":"🔴 SELL — MA20 below MA50";
+  document.getElementById('sgt').textContent=`⚡ Procurement signal — ${c}`;
+  document.getElementById('sm20').textContent=fmt(lm20);
+  document.getElementById('sm50').textContent=fmt(lm50);
+  document.getElementById('scur').textContent=fmt(lp);
+  const sb=document.getElementById('sb');
+  sb.textContent=buy?'🟢 BUY — MA20 above MA50':'🔴 SELL — MA20 below MA50';
   sb.style.cssText=`padding:7px 16px;border-radius:6px;font-size:13px;font-weight:700;display:inline-block;`
-    +`background:${buy?"#10B98118":"#EF444418"};color:${buy?"#10B981":"#EF4444"};`
-    +`border:1px solid ${buy?"#10B98140":"#EF444440"}`;
-  Plotly.react("ch-sg",[
-    {x:dt,y:p,type:"scatter",mode:"lines",name:c,line:{color:CC[c],width:1},opacity:0.4},
-    {x:dt,y:m20,type:"scatter",mode:"lines",name:"MA 20",line:{color:"#F59E0B",width:1.5,dash:"dot"}},
-    {x:dt,y:m50,type:"scatter",mode:"lines",name:"MA 50",line:{color:"#A855F7",width:2}},
-  ],{...LB,yaxis:{...LB.yaxis,title:"CNY/ton"},height:h()-60},CFG);
+    +`background:${buy?'#10B98118':'#EF444418'};color:${buy?'var(--gr)':'var(--rd)'};`
+    +`border:1px solid ${buy?'#10B98140':'#EF444440'}`;
+  Plotly.react('ch-sg',[
+    {x:dt,y:p,  type:'scatter',mode:'lines',name:c,    line:{color:CC[c],   width:1},opacity:0.4},
+    {x:dt,y:m20,type:'scatter',mode:'lines',name:'MA 20',line:{color:'#F59E0B',width:1.5,dash:'dot'}},
+    {x:dt,y:m50,type:'scatter',mode:'lines',name:'MA 50',line:{color:'#A855F7',width:2}},
+  ],{...getLB(),yaxis:{...getLB().yaxis,title:'CNY/ton'},height:h()-60},CFG);
 }
 
-window.addEventListener("resize",()=>render());
+window.addEventListener('resize',()=>render());
 init();
 </script>
 </body>
