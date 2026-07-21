@@ -4,9 +4,10 @@ scripts/scrape_and_update.py
 Runs inside GitHub Actions every weekday.
   1. Reads existing docs/data/commodities.json (finds last scraped date)
   2. Scrapes only NEW days from sunsirs.com
-  3. Merges new records into the JSON
-  4. Writes updated JSON back to docs/data/commodities.json
-  5. GitHub Actions commits and pushes automatically
+  3. Converts all prices to RMB/ton (metric ton)
+  4. Merges new records into the JSON
+  5. Writes updated JSON back to docs/data/commodities.json
+  6. GitHub Actions commits and pushes automatically
 """
 
 import json
@@ -25,6 +26,24 @@ JSON_PATH    = Path("docs/data/commodities.json")
 DELAY_MIN    = 1.5
 DELAY_MAX    = 3.0
 MAX_RETRIES  = 3
+
+# ── Unit conversion factors to RMB per metric ton ─────────────────────────────
+# Default for commodities not listed: 1.0 (already RMB/ton)
+# For those that cannot be converted (e.g. Glass RMB/m²), set factor to None.
+CONVERSION_TO_TON = {
+    # RMB/kg → ×1000
+    "Egg": 1000,
+    "Sliver": 1000,        # typo on Sunsirs site
+    "Silver": 1000,
+    # RMB/g → ×1,000,000
+    "Gold": 1_000_000,
+    # RMB/wet ton → same as metric ton
+    "Iron ore": 1,
+    # Non‑convertible
+    "Glass": None,
+}
+# Default factor for anything else
+DEFAULT_FACTOR = 1.0
 
 # ── HTTP session ───────────────────────────────────────────────────────────────
 SESSION = requests.Session()
@@ -54,7 +73,6 @@ def load_existing() -> dict:
         print("No existing data — will scrape full series from scratch.")
         return empty
 
-    # ── KEY FIX: handle empty file (caused by .gitkeep placeholder) ────────────
     if JSON_PATH.stat().st_size == 0:
         print("JSON file exists but is empty — starting fresh.")
         return empty
@@ -62,14 +80,56 @@ def load_existing() -> dict:
     try:
         with open(JSON_PATH, "r", encoding="utf-8") as f:
             data = json.load(f)
-        n_comms = len(data.get("commodities", []))
-        period  = (f"{data['meta'].get('period_from', '')} → "
-                   f"{data['meta'].get('period_to', '')}")
-        print(f"Loaded existing data: {n_comms} commodities · {period}")
-        return data
     except json.JSONDecodeError as e:
         print(f"WARNING: JSON file is corrupted ({e}) — starting fresh.")
         return empty
+
+    n_comms = len(data.get("commodities", []))
+    period  = (f"{data['meta'].get('period_from', '')} → "
+               f"{data['meta'].get('period_to', '')}")
+    print(f"Loaded existing data: {n_comms} commodities · {period}")
+
+    # ── Convert old data to RMB/ton if not already ─────────────────────────────
+    if data.get("meta", {}).get("unit") != "RMB/ton":
+        print("Old data detected (not in RMB/ton). Converting entire dataset...")
+        data = convert_series_to_ton(data)
+        print("Conversion complete.")
+    return data
+
+# ── Convert all series prices to RMB/ton (in‑place) ───────────────────────────
+def convert_series_to_ton(data: dict) -> dict:
+    """
+    For each commodity, apply unit conversion factor to current_price
+    and previous_price lists. Skips commodities that cannot be converted.
+    """
+    series = data.get("series", {})
+    converted_series = {}
+    skipped = []
+
+    for comm, sdata in series.items():
+        factor = CONVERSION_TO_TON.get(comm, DEFAULT_FACTOR)
+        if factor is None:
+            skipped.append(comm)
+            continue
+        # Convert prices
+        new_cur  = [round(v * factor, 2) if v is not None else None for v in sdata.get("current_price", [])]
+        new_prev = [round(v * factor, 2) if v is not None else None for v in sdata.get("previous_price", [])]
+        sdata["current_price"]  = new_cur
+        sdata["previous_price"] = new_prev
+        # Optionally store original unit info
+        sdata["original_unit"] = sdata.get("original_unit", "unknown")
+        converted_series[comm] = sdata
+
+    if skipped:
+        print(f"Skipped (cannot convert to ton): {', '.join(skipped)}")
+        # remove skipped from commodities list
+        data["commodities"] = [c for c in data.get("commodities", []) if c not in skipped]
+        for comm in skipped:
+            data.get("sectors", {}).pop(comm, None)
+
+    data["series"] = converted_series
+    data["meta"]["unit"] = "RMB/ton"
+    return data
 
 # ── Find last scraped date ─────────────────────────────────────────────────────
 def get_last_date(data: dict) -> date | None:
@@ -159,6 +219,10 @@ def clean_price(s: str) -> float | None:
 
 # ── Merge new records into the existing data structure ─────────────────────────
 def merge_records(data: dict, new_records: list[dict]) -> dict:
+    """
+    Merge newly scraped records. Prices are already converted to RMB/ton
+    before calling this function.
+    """
     series  = data.setdefault("series", {})
     sectors = data.setdefault("sectors", {})
 
@@ -176,7 +240,8 @@ def merge_records(data: dict, new_records: list[dict]) -> dict:
         if comm not in series:
             series[comm] = {
                 "dates": [], "current_price": [],
-                "previous_price": [], "sector": ""
+                "previous_price": [], "sector": "",
+                "original_unit": "RMB/ton"   # after conversion it's always this
             }
 
         existing_dates = set(series[comm]["dates"])
@@ -185,8 +250,8 @@ def merge_records(data: dict, new_records: list[dict]) -> dict:
             d  = rec["date"]
             if d in existing_dates:
                 continue
-            cp = clean_price(rec.get("Current day price", ""))
-            pp = clean_price(rec.get("Previous day price", ""))
+            cp = rec.get("current_price_ton")   # pre‑converted value
+            pp = rec.get("previous_price_ton")
             if cp is None:
                 continue
             series[comm]["dates"].append(d)
@@ -194,6 +259,7 @@ def merge_records(data: dict, new_records: list[dict]) -> dict:
             series[comm]["previous_price"].append(pp)
             series[comm]["sector"] = sectors.get(comm, "")
 
+        # sort all triples
         triples = sorted(zip(
             series[comm]["dates"],
             series[comm]["current_price"],
@@ -209,6 +275,23 @@ def merge_records(data: dict, new_records: list[dict]) -> dict:
     data["commodities"] = sorted(series.keys())
     return data
 
+# ── Convert a single record's prices to RMB/ton ────────────────────────────────
+def convert_record_to_ton(rec: dict) -> dict:
+    """Apply conversion factor to one scraped record. Return enriched record
+    with additional fields 'current_price_ton' and 'previous_price_ton'.
+    If commodity cannot be converted, returns None."""
+    comm = rec.get("Commodity", "").strip()
+    factor = CONVERSION_TO_TON.get(comm, DEFAULT_FACTOR)
+    if factor is None:
+        return None   # skip non‑convertible commodities entirely
+
+    cp_raw = clean_price(rec.get("Current day price", ""))
+    pp_raw = clean_price(rec.get("Previous day price", ""))
+    rec["current_price_ton"]  = round(cp_raw * factor, 2) if cp_raw is not None else None
+    rec["previous_price_ton"] = round(pp_raw * factor, 2) if pp_raw is not None else None
+    # also keep original raw string for reference if needed
+    return rec
+
 # ── Write updated JSON ─────────────────────────────────────────────────────────
 def write_json(data: dict):
     all_dates = [d for s in data["series"].values() for d in s["dates"]]
@@ -219,6 +302,7 @@ def write_json(data: dict):
         "period_from"       : min(all_dates) if all_dates else "",
         "period_to"         : max(all_dates) if all_dates else "",
         "total_commodities" : len(data["commodities"]),
+        "unit"              : "RMB/ton",          # important: mark normalized unit
     }
 
     JSON_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -229,11 +313,12 @@ def write_json(data: dict):
     print(f"\n✅  JSON written → {JSON_PATH}  ({size_mb:.1f} MB)")
     print(f"    Period    : {data['meta']['period_from']} → {data['meta']['period_to']}")
     print(f"    Commodities: {len(data['commodities'])}")
+    print(f"    Unit      : RMB/ton")
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 def main():
     print("=" * 55)
-    print("  SunSirs Daily Updater")
+    print("  SunSirs Daily Updater (RMB/ton normalized)")
     print(f"  Today: {TODAY}")
     print("=" * 55)
 
@@ -274,8 +359,23 @@ def main():
         else:
             records = parse_day(html, d)
             if records:
-                all_new_records.extend(records)
-                print(f"  OK    {d}  ({len(records)} commodities)")
+                # Convert prices to RMB/ton, skip non‑convertible
+                converted = []
+                skipped_today = []
+                for rec in records:
+                    conv_rec = convert_record_to_ton(rec)
+                    if conv_rec is not None:
+                        converted.append(conv_rec)
+                    else:
+                        skipped_today.append(rec.get("Commodity", "?"))
+                if skipped_today:
+                    print(f"         Skipped (no ton conversion): {', '.join(skipped_today)}")
+                if converted:
+                    all_new_records.extend(converted)
+                    print(f"  OK    {d}  ({len(converted)} usable commodities)")
+                else:
+                    empty_days.append(str(d))
+                    print(f"  EMPTY {d} (no convertible data)")
             else:
                 empty_days.append(str(d))
                 print(f"  EMPTY {d}")
@@ -284,7 +384,7 @@ def main():
             time.sleep(random.uniform(DELAY_MIN, DELAY_MAX))
 
     if all_new_records:
-        print(f"\nMerging {len(all_new_records):,} new rows…")
+        print(f"\nMerging {len(all_new_records):,} new rows (RMB/ton)…")
         data = merge_records(data, all_new_records)
 
     write_json(data)
