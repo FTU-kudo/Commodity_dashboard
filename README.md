@@ -1,6 +1,6 @@
 # 📊 Commodity Prices Tracker — Dashboard Version
 
-Automated daily pipeline that scrapes commodity prices from [SunSirs](https://sunsirs.com/uk/) and delivers a dashboard evryday (Vietnam time, UTC+7). Try the dashboard [here](https://github.com/FTU-kudo/Commodity_dashboard).
+Automated daily pipeline that scrapes commodity prices from [SunSirs](https://sunsirs.com/uk/) and delivers a dashboard evryday (Vietnam time, UTC+7). Try the dashboard [here]([https://github.com/FTU-kudo/Commodity_dashboard](https://ftu-kudo.github.io/Commodity_dashboard/)).
 
 ---
 
