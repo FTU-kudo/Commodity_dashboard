@@ -1,299 +1,461 @@
-"""
-scripts/scrape_and_update.py
-=============================
-Runs inside GitHub Actions every weekday.
-  1. Reads existing docs/data/commodities.json (finds last scraped date)
-  2. Scrapes only NEW days from sunsirs.com
-  3. Merges new records into the JSON
-  4. Writes updated JSON back to docs/data/commodities.json
-  5. GitHub Actions commits and pushes automatically
-"""
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SunSirs Chemical Commodities Dashboard</title>
+<script src="https://cdn.plot.ly/plotly-2.29.0.min.js"></script>
+<style>
+:root,[data-theme="dark"]{
+  --bg:#0D1117;--card:#161B27;--bd:#2D3446;--tx:#E6EDF3;
+  --mu:#8892B0;--hv:#1E2433;--gr:#10B981;--rd:#EF4444;--am:#F59E0B;
+  --plot-bg:#161B27;--plot-grid:#2D3446;--plot-font:#8892B0;
+  --hover-bg:#1E2433;--hover-bd:#2D3446;
+}
+[data-theme="light"]{
+  --bg:#F0F4F8;--card:#FFFFFF;--bd:#E2E8F0;--tx:#1A202C;
+  --mu:#718096;--hv:#F7FAFC;--gr:#059669;--rd:#DC2626;--am:#D97706;
+  --plot-bg:#FFFFFF;--plot-grid:#E2E8F0;--plot-font:#718096;
+  --hover-bg:#FFFFFF;--hover-bd:#E2E8F0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,sans-serif;
+  height:100vh;display:flex;flex-direction:column;overflow:hidden;transition:background .25s,color .25s}
+#hdr{background:var(--card);border-bottom:.5px solid var(--bd);
+  padding:9px 18px;display:flex;align-items:center;justify-content:space-between;
+  flex-shrink:0;transition:background .25s,border-color .25s}
+.ht{font-weight:700;font-size:14px}
+.hs{font-size:10px;color:var(--mu);margin-top:2px}
+#hdr-right{display:flex;align-items:center;gap:10px}
+#upd{font-size:10px;color:var(--mu);background:var(--hv);padding:3px 9px;
+  border-radius:4px;border:.5px solid var(--bd);transition:background .25s}
+#theme-btn{background:var(--hv);color:var(--tx);border:.5px solid var(--bd);
+  border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;
+  display:flex;align-items:center;gap:5px;transition:background .25s;white-space:nowrap}
+#theme-btn:hover{border-color:var(--mu)}
+#wrap{display:flex;flex:1;overflow:hidden;min-height:0}
+#side{width:200px;background:var(--card);border-right:.5px solid var(--bd);
+  padding:12px 10px;display:flex;flex-direction:column;flex-shrink:0;
+  overflow:hidden;transition:background .25s,border-color .25s}
+.sl{font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:.07em;
+  margin-bottom:7px;margin-top:2px;flex-shrink:0}
 
-import json
-import time
-import random
-import requests
-from pathlib import Path
-from datetime import date, timedelta
-from bs4 import BeautifulSoup
+/* ── Search box ─────────────────────────────────────────────────────────────── */
+#search-wrap{position:relative;margin-bottom:6px;flex-shrink:0}
+#comm-search{
+  width:100%;padding:6px 26px 6px 28px;
+  background:var(--bg);border:.5px solid var(--bd);border-radius:6px;
+  color:var(--tx);font-size:10.5px;outline:none;
+  transition:border-color .2s,background .25s}
+#comm-search:focus{border-color:var(--mu)}
+#comm-search::placeholder{color:var(--mu)}
+#search-icon{position:absolute;left:8px;top:50%;transform:translateY(-50%);
+  font-size:11px;color:var(--mu);pointer-events:none}
+#search-clear{position:absolute;right:7px;top:50%;transform:translateY(-50%);
+  cursor:pointer;color:var(--mu);font-size:11px;display:none;
+  width:14px;height:14px;border-radius:50%;background:var(--bd);
+  display:none;align-items:center;justify-content:center;line-height:1}
+#search-clear:hover{background:var(--mu);color:var(--card)}
+#srch-meta{font-size:9px;margin-bottom:6px;flex-shrink:0;display:none;
+  display:flex;justify-content:space-between;align-items:center}
+#srch-count{color:var(--mu)}
+#srch-add-all{color:var(--gr);cursor:pointer;font-size:9px}
+#srch-add-all:hover{text-decoration:underline}
+#srch-none{font-size:11px;color:var(--mu);padding:12px 4px;display:none;text-align:center}
 
-# ── Configuration ──────────────────────────────────────────────────────────────
-SERIES_START = date(2018, 1, 1)
-TODAY        = date.today()
-BASE_URL     = "https://sunsirs.com/uk/sdetail-day-{yyyy}-{mmdd}.html"
-JSON_PATH    = Path("docs/data/commodities.json")
-DELAY_MIN    = 1.5
-DELAY_MAX    = 3.0
-MAX_RETRIES  = 3
+/* ── Commodity list ─────────────────────────────────────────────────────────── */
+#clist{overflow-y:auto;flex:1;margin-bottom:4px}
+.ci{padding:7px 8px;margin-bottom:3px;border-radius:6px;cursor:pointer;
+  border:.5px solid transparent;user-select:none;display:flex;align-items:flex-start;gap:7px}
+.ci:hover,.ci.on{background:var(--hv)}.ci.on{border-color:var(--cc,transparent)}
+.cd{width:8px;height:8px;border-radius:2px;flex-shrink:0;margin-top:2px;background:var(--bd)}
+.ci.on .cd{background:var(--cc)}
+.cn{font-size:10.5px;color:var(--mu);line-height:1.3}.ci.on .cn{color:var(--tx)}
+.cn mark{background:var(--am);color:#000;border-radius:2px;padding:0 1px}
+.cc2{font-size:9px;margin-left:15px;margin-top:1px}
 
-# ── HTTP session ───────────────────────────────────────────────────────────────
-SESSION = requests.Session()
-SESSION.headers.update({
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
-    ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Referer": "https://sunsirs.com/uk/",
-})
+hr.div{border:none;border-top:.5px solid var(--bd);margin:10px 0;flex-shrink:0}
+.ti{padding:6px 8px;margin-bottom:2px;border-radius:5px;cursor:pointer;
+  font-size:10.5px;color:var(--mu);flex-shrink:0}
+.ti:hover,.ti.on{background:var(--bd)}.ti.on{color:var(--tx);font-weight:500}
 
-# ── Load existing JSON ─────────────────────────────────────────────────────────
-def load_existing() -> dict:
-    """
-    Load existing commodities.json.
-    Handles three cases gracefully:
-      1. File does not exist  → start fresh
-      2. File is empty        → start fresh (fixes the .gitkeep empty-file bug)
-      3. File is corrupt JSON → start fresh with a warning
-    """
-    empty = {"meta": {}, "commodities": [], "sectors": {}, "series": {}}
+#main{flex:1;overflow-y:auto;padding:16px;min-width:0}
+#mrow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.mc{background:var(--card);border:.5px solid var(--bd);border-radius:8px;
+  padding:10px 13px;flex:1;min-width:120px;transition:background .25s}
+.ml{font-size:8px;color:var(--mu);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px}
+.mv{font-size:17px;font-weight:600;color:var(--tx)}.ms{font-size:10px;margin-top:2px}
+#ccard{background:var(--card);border:.5px solid var(--bd);border-radius:10px;
+  padding:14px 16px;transition:background .25s}
+.ct{font-size:11px;font-weight:600;color:var(--mu);margin-bottom:5px}
+.cd2{font-size:10px;color:var(--mu);margin-bottom:12px}
+.note{font-size:10px;padding:5px 9px;border-radius:4px;margin-bottom:10px}
+.ng{background:rgba(16,185,129,.08);border:.5px solid rgba(16,185,129,.25);color:var(--gr)}
+.na{background:rgba(245,158,11,.08);border:.5px solid rgba(245,158,11,.25);color:var(--am)}
+.panel{display:none}.panel.on{display:block}
+#sb{display:inline-block;padding:7px 16px;border-radius:6px;font-size:13px;font-weight:700;margin-bottom:12px}
+.scards{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.load{display:flex;align-items:center;justify-content:center;height:260px;color:var(--mu);font-size:13px}
+</style>
+</head>
+<body>
 
-    if not JSON_PATH.exists():
-        print("No existing data — will scrape full series from scratch.")
-        return empty
+<div id="hdr">
+  <div>
+    <div class="ht">🧪 SunSirs Chemical Commodities Dashboard</div>
+    <div class="hs" id="hs">Loading data…</div>
+  </div>
+  <div id="hdr-right">
+    <div id="upd"></div>
+    <button id="theme-btn" onclick="toggleTheme()">☀️ Light mode</button>
+  </div>
+</div>
 
-    # ── KEY FIX: handle empty file (caused by .gitkeep placeholder) ────────────
-    if JSON_PATH.stat().st_size == 0:
-        print("JSON file exists but is empty — starting fresh.")
-        return empty
+<div id="wrap">
+  <div id="side">
+    <div class="sl">Select commodities</div>
 
-    try:
-        with open(JSON_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        n_comms = len(data.get("commodities", []))
-        period  = (f"{data['meta'].get('period_from', '')} → "
-                   f"{data['meta'].get('period_to', '')}")
-        print(f"Loaded existing data: {n_comms} commodities · {period}")
-        return data
-    except json.JSONDecodeError as e:
-        print(f"WARNING: JSON file is corrupted ({e}) — starting fresh.")
-        return empty
+    <!-- ── Search box ──────────────────────────────────────────────────────── -->
+    <div id="search-wrap">
+      <span id="search-icon">🔍</span>
+      <input id="comm-search" type="text"
+        placeholder="Search commodities…"
+        oninput="filterList(this.value)"
+        onkeydown="searchKeydown(event)">
+      <span id="search-clear" onclick="clearSearch()">✕</span>
+    </div>
+    <!-- Result count + "Add all visible" shortcut -->
+    <div id="srch-meta">
+      <span id="srch-count"></span>
+      <span id="srch-add-all" onclick="addAllVisible()">+ Add all visible</span>
+    </div>
+    <div id="srch-none">No matches found</div>
+    <!-- ──────────────────────────────────────────────────────────────────── -->
 
-# ── Find last scraped date ─────────────────────────────────────────────────────
-def get_last_date(data: dict) -> date | None:
-    all_dates = []
-    for s in data.get("series", {}).values():
-        all_dates.extend(s.get("dates", []))
-    if not all_dates:
-        return None
-    return date.fromisoformat(max(all_dates))
+    <div id="clist"><div class="load" style="height:60px;font-size:12px">Loading…</div></div>
 
-# ── URL builder ────────────────────────────────────────────────────────────────
-def build_url(d: date) -> str:
-    return BASE_URL.format(yyyy=d.strftime("%Y"), mmdd=d.strftime("%m%d"))
+    <hr class="div">
+    <div class="sl" style="flex-shrink:0">Analysis view</div>
+    <div class="ti on" onclick="sw('ov',this)">📈 Overview</div>
+    <div class="ti" onclick="sw('pf',this)">🎯 Performance</div>
+    <div class="ti" onclick="sw('vl',this)">📊 Volatility</div>
+    <div class="ti" onclick="sw('cr',this)">🔗 Correlation</div>
+    <div class="ti" onclick="sw('sn',this)">🌿 Seasonality</div>
+    <div class="ti" onclick="sw('sg',this)">⚡ Signals</div>
+  </div>
 
-# ── Fetch a page with retries ──────────────────────────────────────────────────
-def fetch_page(url: str) -> str | None:
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            r = SESSION.get(url, timeout=20)
-            if r.status_code == 200:
-                return r.text
-            if r.status_code == 404:
-                return None
-            print(f"  HTTP {r.status_code} (attempt {attempt}): {url}")
-        except requests.RequestException as e:
-            print(f"  Request error (attempt {attempt}): {e}")
-        if attempt < MAX_RETRIES:
-            time.sleep(5)
-    return None
+  <div id="main">
+    <div id="mrow"></div>
+    <div id="ccard">
+      <div class="load" id="ldmsg">⏳ Loading commodity data…</div>
+      <div id="ov" class="panel on">
+        <div class="ct">Price history (CNY/ton)</div>
+        <div id="ch-ov"></div>
+      </div>
+      <div id="pf" class="panel">
+        <div class="ct">Rebased price index</div>
+        <div class="cd2">Resets all prices to 100 at series start — fair comparison regardless of absolute price levels.</div>
+        <div id="ch-pf"></div>
+      </div>
+      <div id="vl" class="panel">
+        <div class="ct">30-day rolling volatility (%)</div>
+        <div class="cd2">Standard deviation of daily returns over a 30-day window. Higher = more price risk.</div>
+        <div id="ch-vl"></div>
+      </div>
+      <div id="cr" class="panel">
+        <div class="ct">Return correlation matrix</div>
+        <div class="note ng">✓ Computed on daily returns — not price levels — to avoid spurious correlation from shared trends.</div>
+        <div id="ch-cr"></div>
+      </div>
+      <div id="sn" class="panel">
+        <div class="ct">Monthly seasonality pattern</div>
+        <div class="cd2">Average price by calendar month. Reveals seasonal procurement windows.</div>
+        <div id="ch-sn"></div>
+      </div>
+      <div id="sg" class="panel">
+        <div class="ct" id="sgt">⚡ Procurement signal</div>
+        <div class="note na">⚠ Heuristic only — for procurement planning context. Validate with fundamental analysis.</div>
+        <div class="scards">
+          <div id="sb"></div>
+          <div class="mc" style="flex:none"><div class="ml">MA 20</div><div class="mv" id="sm20">—</div></div>
+          <div class="mc" style="flex:none"><div class="ml">MA 50</div><div class="mv" id="sm50">—</div></div>
+          <div class="mc" style="flex:none"><div class="ml">Current price</div><div class="mv" id="scur">—</div></div>
+        </div>
+        <div id="ch-sg"></div>
+      </div>
+    </div>
+  </div>
+</div>
 
-# ── Parse one day's HTML table ─────────────────────────────────────────────────
-def parse_day(html: str, d: date) -> list[dict]:
-    soup  = BeautifulSoup(html, "lxml")
-    table = (
-        soup.find("table", class_=lambda c: c and "com" in c.lower())
-        or soup.find("table")
-    )
-    if not table:
-        return []
+<script>
+/* ── Theme ─────────────────────────────────────────────────────────────────── */
+function getTheme(){return document.documentElement.getAttribute('data-theme')||'dark'}
+function setTheme(t){
+  document.documentElement.setAttribute('data-theme',t);
+  localStorage.setItem('theme',t);
+  document.getElementById('theme-btn').textContent=t==='dark'?'☀️ Light mode':'🌙 Dark mode';
+  if(window.D)render();
+}
+function toggleTheme(){setTheme(getTheme()==='dark'?'light':'dark')}
+setTheme(localStorage.getItem('theme')||'dark');
 
-    rows = table.find_all("tr")
-    headers, data_rows = [], []
-    for row in rows:
-        cells = row.find_all(["th", "td"])
-        texts = [c.get_text(strip=True) for c in cells]
-        if not texts:
-            continue
-        if not headers and row.find("th"):
-            headers = texts
-        else:
-            data_rows.append(texts)
+/* ── Plotly layout (theme-aware) ─────────────────────────────────────────── */
+const COLS=["#3B82F6","#10B981","#F97316","#A855F7","#EF4444","#F59E0B","#06B6D4","#EC4899","#84CC16","#6366F1"];
+const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const CFG={responsive:true,displayModeBar:false};
 
-    if not headers and data_rows:
-        headers = data_rows.pop(0)
-    if len(headers) < 4:
-        return []
+function getLB(){
+  const l=getTheme()==='light';
+  return{
+    paper_bgcolor:l?'#FFFFFF':'#161B27',plot_bgcolor:l?'#FFFFFF':'#161B27',
+    font:{color:l?'#718096':'#8892B0',size:10,family:'system-ui'},
+    margin:{t:10,r:16,b:38,l:72},
+    xaxis:{gridcolor:l?'#E2E8F0':'#2D3446',linecolor:l?'#E2E8F0':'#2D3446',tickfont:{size:9}},
+    yaxis:{gridcolor:l?'#E2E8F0':'#2D3446',linecolor:l?'#E2E8F0':'#2D3446',tickfont:{size:9}},
+    legend:{bgcolor:'transparent',font:{size:10}},
+    hovermode:'x unified',
+    hoverlabel:{bgcolor:l?'#FFFFFF':'#1E2433',bordercolor:l?'#E2E8F0':'#2D3446',font:{size:10}},
+  };
+}
 
-    headers[2] = "Previous day price"
-    headers[3] = "Current day price"
+/* ── State ─────────────────────────────────────────────────────────────────── */
+let D=null,SEL=[],TAB='ov';
+const CC={};
 
-    records = []
-    for row in data_rows:
-        if not any(row):
-            continue
-        row = row[:len(headers)] + [""] * max(0, len(headers) - len(row))
-        rec = {h: v for h, v in zip(headers, row)}
-        rec["date"] = d.isoformat()
-        records.append(rec)
-    return records
+const fmt =(n,d=0)=>n==null?'—':n.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+const fpct=n=>n==null?'—':(n>=0?'+':'')+n.toFixed(1)+'%';
 
-# ── Date range generator ───────────────────────────────────────────────────────
-def date_range(start: date, end: date):
-    cur = start
-    while cur <= end:
-        yield cur
-        cur += timedelta(days=1)
+function rets(p){return p.map((v,i)=>i===0?0:(v-p[i-1])/p[i-1]*100)}
+function rStd(a,w=30){return a.map((_,i)=>{if(i<w)return null;const s=a.slice(i-w,i),m=s.reduce((a,b)=>a+b)/w;return Math.sqrt(s.reduce((a,b)=>a+(b-m)**2)/w)})}
+function pearson(x,y){const n=x.length,mx=x.reduce((a,b)=>a+b)/n,my=y.reduce((a,b)=>a+b)/n,num=x.reduce((s,xi,i)=>s+(xi-mx)*(y[i]-my),0),den=Math.sqrt(x.reduce((s,xi)=>s+(xi-mx)**2)*y.reduce((s,yi)=>s+(yi-my)**2));return den===0?0:num/den}
+function maArr(p,w){return p.map((_,i)=>i<w-1?null:p.slice(i-w+1,i+1).reduce((a,b)=>a+b)/w)}
 
-# ── Clean a price string to float ─────────────────────────────────────────────
-def clean_price(s: str) -> float | None:
-    if not s:
-        return None
-    cleaned = "".join(c for c in s if c.isdigit() or c == ".")
-    try:
-        return round(float(cleaned), 2)
-    except ValueError:
-        return None
+/* ── Bootstrap ─────────────────────────────────────────────────────────────── */
+async function init(){
+  try{
+    const r=await fetch('data/commodities.json');
+    if(!r.ok)throw new Error(`Cannot load data/commodities.json (${r.status})`);
+    D=await r.json();
+    D.commodities.forEach((c,i)=>{CC[c]=COLS[i%COLS.length]});
+    SEL=D.commodities.slice(0,3);
+    document.getElementById('hs').textContent=
+      `${D.meta.period_from} – ${D.meta.period_to} · ${D.meta.source} · ${D.meta.total_commodities} commodities`;
+    document.getElementById('upd').textContent=`Updated: ${D.meta.last_updated}`;
+    // Update search placeholder with real count
+    document.getElementById('comm-search').placeholder=
+      `Search ${D.commodities.length} commodities…`;
+    buildList(); updateMetrics();
+    document.getElementById('ldmsg').style.display='none';
+    render();
+  }catch(e){
+    document.getElementById('ldmsg').textContent='❌ '+e.message;
+  }
+}
 
-# ── Merge new records into the existing data structure ─────────────────────────
-def merge_records(data: dict, new_records: list[dict]) -> dict:
-    series  = data.setdefault("series", {})
-    sectors = data.setdefault("sectors", {})
+/* ── Search engine ──────────────────────────────────────────────────────────── */
+let currentQuery='';
 
-    by_comm: dict[str, list[dict]] = {}
-    for rec in new_records:
-        comm = rec.get("Commodity", "").strip()
-        if not comm:
-            continue
-        by_comm.setdefault(comm, []).append(rec)
-        sector = rec.get("Sectors", "").strip()
-        if sector:
-            sectors[comm] = sector
+function highlight(text,query){
+  if(!query)return text;
+  const idx=text.toLowerCase().indexOf(query.toLowerCase());
+  if(idx===-1)return text;
+  return text.slice(0,idx)
+    +'<mark>'+text.slice(idx,idx+query.length)+'</mark>'
+    +text.slice(idx+query.length);
+}
 
-    for comm, records in by_comm.items():
-        if comm not in series:
-            series[comm] = {
-                "dates": [], "current_price": [],
-                "previous_price": [], "sector": ""
-            }
+function filterList(q){
+  currentQuery=q.trim();
+  const query=currentQuery.toLowerCase();
+  const clearBtn =document.getElementById('search-clear');
+  const metaEl   =document.getElementById('srch-meta');
+  const countEl  =document.getElementById('srch-count');
+  const noneEl   =document.getElementById('srch-none');
 
-        existing_dates = set(series[comm]["dates"])
+  clearBtn.style.display = query ? 'flex' : 'none';
 
-        for rec in sorted(records, key=lambda r: r["date"]):
-            d  = rec["date"]
-            if d in existing_dates:
-                continue
-            cp = clean_price(rec.get("Current day price", ""))
-            pp = clean_price(rec.get("Previous day price", ""))
-            if cp is None:
-                continue
-            series[comm]["dates"].append(d)
-            series[comm]["current_price"].append(cp)
-            series[comm]["previous_price"].append(pp)
-            series[comm]["sector"] = sectors.get(comm, "")
+  if(!query){
+    document.querySelectorAll('.ci').forEach(el=>{el.style.display=''});
+    // Remove highlights
+    document.querySelectorAll('.cn').forEach(el=>{
+      el.innerHTML=el.textContent;
+    });
+    metaEl.style.display='none';
+    noneEl.style.display='none';
+    return;
+  }
 
-        triples = sorted(zip(
-            series[comm]["dates"],
-            series[comm]["current_price"],
-            series[comm]["previous_price"],
-        ))
-        if triples:
-            series[comm]["dates"]          = [t[0] for t in triples]
-            series[comm]["current_price"]  = [t[1] for t in triples]
-            series[comm]["previous_price"] = [t[2] for t in triples]
-
-    data["series"]      = series
-    data["sectors"]     = sectors
-    data["commodities"] = sorted(series.keys())
-    return data
-
-# ── Write updated JSON ─────────────────────────────────────────────────────────
-def write_json(data: dict):
-    all_dates = [d for s in data["series"].values() for d in s["dates"]]
-
-    data["meta"] = {
-        "last_updated"      : TODAY.isoformat(),
-        "source"            : "sunsirs.com/uk",
-        "period_from"       : min(all_dates) if all_dates else "",
-        "period_to"         : max(all_dates) if all_dates else "",
-        "total_commodities" : len(data["commodities"]),
+  let visible=0;
+  document.querySelectorAll('.ci').forEach(el=>{
+    const nameEl=el.querySelector('.cn');
+    const name=nameEl.textContent;
+    const match=name.toLowerCase().includes(query);
+    el.style.display=match?'':'none';
+    if(match){
+      visible++;
+      // Highlight matching text
+      nameEl.innerHTML=highlight(name,currentQuery);
     }
+  });
 
-    JSON_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(JSON_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
+  countEl.textContent=`${visible} of ${D.commodities.length} shown`;
+  metaEl.style.display='flex';
+  noneEl.style.display=visible===0?'block':'none';
+}
 
-    size_mb = JSON_PATH.stat().st_size / 1024 / 1024
-    print(f"\n✅  JSON written → {JSON_PATH}  ({size_mb:.1f} MB)")
-    print(f"    Period    : {data['meta']['period_from']} → {data['meta']['period_to']}")
-    print(f"    Commodities: {len(data['commodities'])}")
+function clearSearch(){
+  const inp=document.getElementById('comm-search');
+  inp.value='';
+  filterList('');
+  inp.focus();
+}
 
-# ── Main ───────────────────────────────────────────────────────────────────────
-def main():
-    print("=" * 55)
-    print("  SunSirs Daily Updater")
-    print(f"  Today: {TODAY}")
-    print("=" * 55)
+// Press Enter to add the first visible (unselected) commodity to selection
+function searchKeydown(e){
+  if(e.key!=='Enter')return;
+  const first=Array.from(document.querySelectorAll('.ci'))
+    .find(el=>el.style.display!=='none'&&!el.classList.contains('on'));
+  if(first)first.click();
+}
 
-    data      = load_existing()
-    last_date = get_last_date(data)
+// "Add all visible" — adds every filtered commodity to selection
+function addAllVisible(){
+  document.querySelectorAll('.ci').forEach(el=>{
+    if(el.style.display!=='none'&&!el.classList.contains('on')){
+      const name=el.querySelector('.cn').textContent;
+      if(!SEL.includes(name))SEL.push(name);
+    }
+  });
+  buildList(); updateMetrics(); render();
+}
 
-    if last_date is None:
-        scrape_from = SERIES_START
-        print(f"\nStarting fresh — scraping from {SERIES_START}")
-    else:
-        scrape_from = last_date + timedelta(days=1)
-        print(f"\nLast saved date : {last_date}")
-        print(f"Scraping from   : {scrape_from} → {TODAY}")
+/* ── Sidebar commodity list ─────────────────────────────────────────────────── */
+function buildList(){
+  const el=document.getElementById('clist');el.innerHTML='';
+  D.commodities.forEach(c=>{
+    const on=SEL.includes(c),col=CC[c];
+    const d=document.createElement('div');
+    d.className='ci'+(on?' on':'');
+    d.style.setProperty('--cc',col);
+    const m=getMetric(c);
+    // Use highlight if there's an active query
+    const displayName=highlight(c,currentQuery);
+    d.innerHTML=`<div class="cd"></div><div><div class="cn">${displayName}</div>${on&&m?`<div class="cc2" style="color:${m.dc>=0?'var(--gr)':'var(--rd)'}">${fpct(m.dc)} today</div>`:''}</div>`;
+    d.onclick=()=>toggle(c);
+    el.appendChild(d);
+  });
+  // Re-apply current search filter after rebuild
+  if(currentQuery)filterList(currentQuery);
+}
 
-    dates_to_scrape = [
-        d for d in date_range(scrape_from, TODAY)
-        if d.weekday() < 5
-    ]
+function toggle(c){
+  SEL=SEL.includes(c)?(SEL.length>1?SEL.filter(x=>x!==c):SEL):[...SEL,c];
+  buildList(); updateMetrics(); render();
+}
 
-    if not dates_to_scrape:
-        print("\n✅  Already up to date — nothing to scrape!")
-        write_json(data)
-        return
+/* ── Metrics row ────────────────────────────────────────────────────────────── */
+function getMetric(c){
+  const s=D.series[c],p=s.current_price,n=p.length;
+  if(!n)return null;
+  const cur=p[n-1],prev=p[n-2]??cur,first=p[0];
+  return{cur,dc:(cur-prev)/prev*100,tr:(cur-first)/first*100};
+}
+function updateMetrics(){
+  const el=document.getElementById('mrow');el.innerHTML='';
+  SEL.forEach(c=>{
+    const m=getMetric(c);if(!m)return;
+    const col=m.dc>=0?'var(--gr)':'var(--rd)';
+    const d=document.createElement('div');d.className='mc';
+    d.innerHTML=`<div class="ml">${c}</div><div class="mv">${fmt(m.cur)}</div><div class="ms" style="color:${col}">${fpct(m.dc)} today · ${fpct(m.tr)} total</div>`;
+    el.appendChild(d);
+  });
+}
 
-    print(f"\nScraping {len(dates_to_scrape)} new day(s)…\n")
+/* ── Tab switching ──────────────────────────────────────────────────────────── */
+function sw(id,el){
+  document.querySelectorAll('.ti').forEach(t=>t.classList.remove('on'));el.classList.add('on');
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('on'));document.getElementById(id).classList.add('on');
+  TAB=id;render();
+}
+function h(){return Math.max(280,Math.floor(window.innerHeight*0.55))}
 
-    all_new_records = []
-    empty_days      = []
-    failed_days     = []
+/* ── Render ─────────────────────────────────────────────────────────────────── */
+function render(){
+  if(!D)return;
+  const fns={ov:rOv,pf:rPf,vl:rVl,cr:rCr,sn:rSn,sg:rSg};
+  if(fns[TAB])fns[TAB]();
+}
+function rOv(){
+  Plotly.react('ch-ov',SEL.map(c=>({
+    x:D.series[c].dates,y:D.series[c].current_price,
+    type:'scatter',mode:'lines',name:c,line:{color:CC[c],width:1.5}
+  })),{...getLB(),yaxis:{...getLB().yaxis,title:'CNY/ton'},height:h()},CFG);
+}
+function rPf(){
+  Plotly.react('ch-pf',SEL.map(c=>{
+    const p=D.series[c].current_price,f=p[0];
+    return{x:D.series[c].dates,y:p.map(v=>+(v/f*100).toFixed(2)),
+      type:'scatter',mode:'lines',name:c,line:{color:CC[c],width:2}};
+  }),{...getLB(),
+    yaxis:{...getLB().yaxis,title:'Index (100 = start)'},
+    shapes:[{type:'line',x0:0,x1:1,xref:'paper',y0:100,y1:100,line:{color:'#2D3446',dash:'dot'}}],
+    height:h()},CFG);
+}
+function rVl(){
+  Plotly.react('ch-vl',SEL.map(c=>{
+    const v=rStd(rets(D.series[c].current_price),30);
+    return{x:D.series[c].dates,y:v,type:'scatter',mode:'lines',name:c,
+      fill:'tozeroy',line:{color:CC[c],width:1.5},fillcolor:CC[c]+'18'};
+  }),{...getLB(),yaxis:{...getLB().yaxis,title:'Std of daily returns (%)'},height:h()},CFG);
+}
+function rCr(){
+  if(SEL.length<2){
+    document.getElementById('ch-cr').innerHTML='<div class="load">Select at least 2 commodities</div>';return;
+  }
+  const rs=Object.fromEntries(SEL.map(c=>[c,rets(D.series[c].current_price)]));
+  const z=SEL.map(a=>SEL.map(b=>+pearson(rs[a],rs[b]).toFixed(3)));
+  const lb=SEL.map(c=>c.split(' ').slice(0,2).join(' '));
+  const l=getTheme()==='light';
+  Plotly.react('ch-cr',[{
+    type:'heatmap',z,x:lb,y:lb,
+    colorscale:[[0,'#EF4444'],[0.5,l?'#F7FAFC':'#161B27'],[1,'#3B82F6']],
+    zmin:-1,zmax:1,
+    text:z.map(r=>r.map(v=>v.toFixed(2))),
+    texttemplate:'<b>%{text}</b>',
+    hovertemplate:'%{y} × %{x}: <b>%{z}</b><extra></extra>',
+  }],{...getLB(),margin:{t:20,r:20,b:90,l:110},height:h()},CFG);
+}
+function rSn(){
+  Plotly.react('ch-sn',SEL.map(c=>{
+    const su=new Array(12).fill(0),co=new Array(12).fill(0);
+    D.series[c].dates.forEach((dt,i)=>{const m=+dt.slice(5,7)-1;su[m]+=D.series[c].current_price[i];co[m]++});
+    return{x:MONTHS,y:su.map((s,m)=>co[m]?+(s/co[m]).toFixed(0):null),
+      type:'bar',name:c,marker:{color:CC[c],opacity:0.85}};
+  }),{...getLB(),barmode:'group',yaxis:{...getLB().yaxis,title:'Avg price (CNY/ton)'},height:h()},CFG);
+}
+function rSg(){
+  const c=SEL[0],s=D.series[c],p=s.current_price,dt=s.dates;
+  const m20=maArr(p,20),m50=maArr(p,50);
+  const lm20=m20[m20.length-1],lm50=m50[m50.length-1],lp=p[p.length-1];
+  const buy=lm20>lm50;
+  document.getElementById('sgt').textContent=`⚡ Procurement signal — ${c}`;
+  document.getElementById('sm20').textContent=fmt(lm20);
+  document.getElementById('sm50').textContent=fmt(lm50);
+  document.getElementById('scur').textContent=fmt(lp);
+  const sb=document.getElementById('sb');
+  sb.textContent=buy?'🟢 BUY — MA20 above MA50':'🔴 SELL — MA20 below MA50';
+  sb.style.cssText=`padding:7px 16px;border-radius:6px;font-size:13px;font-weight:700;display:inline-block;`
+    +`background:${buy?'#10B98118':'#EF444418'};color:${buy?'var(--gr)':'var(--rd)'};`
+    +`border:1px solid ${buy?'#10B98140':'#EF444440'}`;
+  Plotly.react('ch-sg',[
+    {x:dt,y:p,  type:'scatter',mode:'lines',name:c,     line:{color:CC[c],    width:1},opacity:0.4},
+    {x:dt,y:m20,type:'scatter',mode:'lines',name:'MA 20',line:{color:'#F59E0B',width:1.5,dash:'dot'}},
+    {x:dt,y:m50,type:'scatter',mode:'lines',name:'MA 50',line:{color:'#A855F7',width:2}},
+  ],{...getLB(),yaxis:{...getLB().yaxis,title:'CNY/ton'},height:h()-60},CFG);
+}
 
-    for i, d in enumerate(dates_to_scrape):
-        url  = build_url(d)
-        html = fetch_page(url)
-
-        if html is None:
-            failed_days.append(str(d))
-            print(f"  FAIL  {d}")
-        else:
-            records = parse_day(html, d)
-            if records:
-                all_new_records.extend(records)
-                print(f"  OK    {d}  ({len(records)} commodities)")
-            else:
-                empty_days.append(str(d))
-                print(f"  EMPTY {d}")
-
-        if i < len(dates_to_scrape) - 1:
-            time.sleep(random.uniform(DELAY_MIN, DELAY_MAX))
-
-    if all_new_records:
-        print(f"\nMerging {len(all_new_records):,} new rows…")
-        data = merge_records(data, all_new_records)
-
-    write_json(data)
-
-    if empty_days:
-        print(f"\n  No-data days  : {len(empty_days)}")
-    if failed_days:
-        print(f"\n  ⚠ Failed days : {', '.join(failed_days)}")
-
-
-if __name__ == "__main__":
-    main()
+window.addEventListener('resize',()=>render());
+init();
+</script>
+</body>
+</html>
