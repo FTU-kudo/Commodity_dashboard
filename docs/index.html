@@ -6,71 +6,128 @@
 <title>SunSirs Chemical Commodities Dashboard</title>
 <script src="https://cdn.plot.ly/plotly-2.29.0.min.js"></script>
 <style>
-/* ── Theme variables ────────────────────────────────────────────────────────── */
+/* ── Themes ─────────────────────────────────────────────────────────────────── */
 :root,[data-theme="dark"]{
   --bg:#0D1117;--card:#161B27;--bd:#2D3446;--tx:#E6EDF3;
   --mu:#8892B0;--hv:#1E2433;--gr:#10B981;--rd:#EF4444;--am:#F59E0B;
-  --plot-bg:#161B27;--plot-grid:#2D3446;--plot-font:#8892B0;
-  --hover-bg:#1E2433;--hover-bd:#2D3446;
-  --toggle-bg:#2D3446;--toggle-tx:#E6EDF3;
 }
 [data-theme="light"]{
   --bg:#F0F4F8;--card:#FFFFFF;--bd:#E2E8F0;--tx:#1A202C;
   --mu:#718096;--hv:#F7FAFC;--gr:#059669;--rd:#DC2626;--am:#D97706;
-  --plot-bg:#FFFFFF;--plot-grid:#E2E8F0;--plot-font:#718096;
-  --hover-bg:#FFFFFF;--hover-bd:#E2E8F0;
-  --toggle-bg:#E2E8F0;--toggle-tx:#1A202C;
 }
-/* ── Reset ──────────────────────────────────────────────────────────────────── */
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,sans-serif;
-  height:100vh;display:flex;flex-direction:column;overflow:hidden;
-  transition:background .25s,color .25s}
+  height:100vh;display:flex;flex-direction:column;overflow:hidden;transition:background .2s,color .2s}
+
 /* ── Header ─────────────────────────────────────────────────────────────────── */
-#hdr{background:var(--card);border-bottom:.5px solid var(--bd);
-  padding:9px 18px;display:flex;align-items:center;justify-content:space-between;
-  flex-shrink:0;transition:background .25s,border-color .25s}
+#hdr{background:var(--card);border-bottom:.5px solid var(--bd);padding:9px 18px;
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0;transition:background .2s}
 .ht{font-weight:700;font-size:14px}
 .hs{font-size:10px;color:var(--mu);margin-top:2px}
 #hdr-right{display:flex;align-items:center;gap:10px}
 #upd{font-size:10px;color:var(--mu);background:var(--hv);padding:3px 9px;
-  border-radius:4px;border:.5px solid var(--bd);transition:background .25s}
-/* ── Theme toggle button ─────────────────────────────────────────────────────── */
-#theme-btn{
-  background:var(--toggle-bg);color:var(--toggle-tx);
-  border:.5px solid var(--bd);border-radius:6px;
-  padding:4px 10px;font-size:12px;cursor:pointer;
-  display:flex;align-items:center;gap:5px;
-  transition:background .25s,border-color .25s;white-space:nowrap}
+  border-radius:4px;border:.5px solid var(--bd)}
+#theme-btn{background:var(--hv);color:var(--tx);border:.5px solid var(--bd);border-radius:6px;
+  padding:4px 10px;font-size:12px;cursor:pointer;white-space:nowrap;transition:background .2s}
 #theme-btn:hover{border-color:var(--mu)}
-/* ── Layout ──────────────────────────────────────────────────────────────────── */
+
+/* ── Layout ─────────────────────────────────────────────────────────────────── */
 #wrap{display:flex;flex:1;overflow:hidden;min-height:0}
+
 /* ── Sidebar ─────────────────────────────────────────────────────────────────── */
-#side{width:192px;background:var(--card);border-right:.5px solid var(--bd);
-  padding:12px 10px;overflow-y:auto;flex-shrink:0;
-  transition:background .25s,border-color .25s}
-.sl{font-size:9px;color:var(--mu);text-transform:uppercase;
-  letter-spacing:.07em;margin-bottom:8px;margin-top:2px}
-.ci{padding:7px 8px;margin-bottom:3px;border-radius:6px;cursor:pointer;
-  border:.5px solid transparent;user-select:none;display:flex;align-items:flex-start;gap:7px}
+#side{
+  width:200px;background:var(--card);border-right:.5px solid var(--bd);
+  padding:10px 8px;display:flex;flex-direction:column;flex-shrink:0;
+  overflow:hidden;transition:background .2s,border-color .2s
+}
+
+/* ── Toggle header ───────────────────────────────────────────────────────────── */
+#comm-toggle{
+  display:flex;align-items:center;gap:6px;padding:6px 6px;
+  cursor:pointer;border-radius:6px;user-select:none;flex-shrink:0;
+  transition:background .15s;margin-bottom:4px
+}
+#comm-toggle:hover{background:var(--hv)}
+#comm-chevron{font-size:8px;color:var(--mu);transition:transform .2s;flex-shrink:0}
+#comm-toggle-label{font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:.07em;flex:1}
+#sel-badge{
+  font-size:8.5px;color:var(--tx);background:var(--bd);
+  border-radius:999px;padding:1px 7px;font-weight:500;flex-shrink:0
+}
+
+/* ── Selected chips ──────────────────────────────────────────────────────────── */
+#sel-chips{
+  display:flex;flex-wrap:wrap;gap:4px;padding:0 2px;margin-bottom:4px;flex-shrink:0;
+  min-height:0
+}
+.chip{
+  display:inline-flex;align-items:center;gap:3px;
+  background:var(--hv);border-radius:4px;
+  padding:2px 5px 2px 6px;font-size:9.5px;color:var(--tx);
+  border-left:2px solid var(--chip-c,var(--mu));
+  max-width:162px
+}
+.chip-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip-x{color:var(--mu);cursor:pointer;flex-shrink:0;font-size:11px;line-height:1}
+.chip-x:hover{color:var(--rd)}
+#no-sel-hint{font-size:9.5px;color:var(--mu);padding:2px 4px;margin-bottom:4px;flex-shrink:0}
+
+/* ── Collapsible commodity panel ─────────────────────────────────────────────── */
+#comm-panel{
+  display:flex;flex-direction:column;
+  overflow:hidden;flex-shrink:1;
+  max-height:0;transition:max-height .25s ease
+}
+#comm-panel.open{max-height:48vh}
+
+/* Search ─────────────────────────────────────────────────────────────────────── */
+#search-wrap{position:relative;margin-bottom:5px;flex-shrink:0}
+#comm-search{
+  width:100%;padding:6px 24px 6px 26px;
+  background:var(--bg);border:.5px solid var(--bd);border-radius:5px;
+  color:var(--tx);font-size:10.5px;outline:none;transition:border-color .2s}
+#comm-search:focus{border-color:var(--mu)}
+#comm-search::placeholder{color:var(--mu)}
+#search-icon{position:absolute;left:8px;top:50%;transform:translateY(-50%);
+  font-size:10px;color:var(--mu);pointer-events:none}
+#search-clear{position:absolute;right:7px;top:50%;transform:translateY(-50%);
+  cursor:pointer;color:var(--mu);font-size:10px;display:none}
+#search-clear:hover{color:var(--tx)}
+
+#srch-meta{font-size:9px;color:var(--mu);margin-bottom:5px;flex-shrink:0;
+  display:none;justify-content:space-between}
+#srch-add-all{color:var(--gr);cursor:pointer}
+#srch-add-all:hover{text-decoration:underline}
+#srch-none{font-size:11px;color:var(--mu);padding:10px 4px;display:none;text-align:center}
+
+/* Commodity list ─────────────────────────────────────────────────────────────── */
+#clist{overflow-y:auto;flex:1;min-height:0}
+.ci{padding:6px 7px;margin-bottom:2px;border-radius:5px;cursor:pointer;
+  border:.5px solid transparent;user-select:none;display:flex;align-items:flex-start;gap:6px}
 .ci:hover,.ci.on{background:var(--hv)}.ci.on{border-color:var(--cc,transparent)}
-.cd{width:8px;height:8px;border-radius:2px;flex-shrink:0;margin-top:2px;background:var(--bd)}
-.ci.on .cd{background:var(--cc)}
-.cn{font-size:10.5px;color:var(--mu);line-height:1.3}.ci.on .cn{color:var(--tx)}
-.cc2{font-size:9px;margin-left:15px;margin-top:1px}
-hr.div{border:none;border-top:.5px solid var(--bd);margin:10px 0}
+.cdot{width:7px;height:7px;border-radius:2px;flex-shrink:0;margin-top:2px;background:var(--bd)}
+.ci.on .cdot{background:var(--cc)}
+.cn{font-size:10px;color:var(--mu);line-height:1.3}.ci.on .cn{color:var(--tx)}
+.cn mark{background:var(--am);color:#000;border-radius:2px;padding:0 1px}
+.cc2{font-size:9px;margin-left:13px;margin-top:1px}
+
+/* ── Analysis view (always visible) ─────────────────────────────────────────── */
+#analysis-section{flex-shrink:0;margin-top:auto;padding-top:8px}
+.adiv{border:none;border-top:.5px solid var(--bd);margin:0 0 8px}
+.sl{font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:.07em;margin-bottom:7px}
 .ti{padding:6px 8px;margin-bottom:2px;border-radius:5px;cursor:pointer;
   font-size:10.5px;color:var(--mu)}
 .ti:hover,.ti.on{background:var(--bd)}.ti.on{color:var(--tx);font-weight:500}
+
 /* ── Main content ────────────────────────────────────────────────────────────── */
 #main{flex:1;overflow-y:auto;padding:16px;min-width:0}
 #mrow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
 .mc{background:var(--card);border:.5px solid var(--bd);border-radius:8px;
-  padding:10px 13px;flex:1;min-width:120px;transition:background .25s}
+  padding:10px 13px;flex:1;min-width:120px;transition:background .2s}
 .ml{font-size:8px;color:var(--mu);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px}
 .mv{font-size:17px;font-weight:600;color:var(--tx)}.ms{font-size:10px;margin-top:2px}
 #ccard{background:var(--card);border:.5px solid var(--bd);border-radius:10px;
-  padding:14px 16px;transition:background .25s}
+  padding:14px 16px;transition:background .2s}
 .ct{font-size:11px;font-weight:600;color:var(--mu);margin-bottom:5px}
 .cd2{font-size:10px;color:var(--mu);margin-bottom:12px}
 .note{font-size:10px;padding:5px 9px;border-radius:4px;margin-bottom:10px}
@@ -79,7 +136,23 @@ hr.div{border:none;border-top:.5px solid var(--bd);margin:10px 0}
 .panel{display:none}.panel.on{display:block}
 #sb{display:inline-block;padding:7px 16px;border-radius:6px;font-size:13px;font-weight:700;margin-bottom:12px}
 .scards{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
-.load{display:flex;align-items:center;justify-content:center;height:260px;color:var(--mu);font-size:13px}
+.load{display:flex;align-items:center;justify-content:center;
+  height:260px;color:var(--mu);font-size:13px}
+
+/* ── Empty state ─────────────────────────────────────────────────────────────── */
+#empty-state{
+  display:none;flex-direction:column;align-items:center;justify-content:center;
+  height:340px;gap:10px;color:var(--mu)
+}
+#empty-state .eicon{font-size:40px;opacity:.4}
+#empty-state .etitle{font-size:14px;font-weight:500;color:var(--tx)}
+#empty-state .esub{font-size:12px}
+#empty-state .eaction{
+  margin-top:6px;padding:7px 16px;border-radius:6px;
+  background:var(--hv);border:.5px solid var(--bd);
+  cursor:pointer;font-size:12px;color:var(--tx);transition:background .15s
+}
+#empty-state .eaction:hover{background:var(--bd)}
 </style>
 </head>
 <body>
@@ -96,36 +169,75 @@ hr.div{border:none;border-top:.5px solid var(--bd);margin:10px 0}
 </div>
 
 <div id="wrap">
+  <!-- ── Sidebar ───────────────────────────────────────────────────────────── -->
   <div id="side">
-    <div class="sl">Select commodities</div>
-    <div id="clist"><div class="load" style="height:60px;font-size:12px">Loading…</div></div>
-    <hr class="div">
-    <div class="sl">Analysis view</div>
-    <div class="ti on" onclick="sw('ov',this)">📈 Overview</div>
-    <div class="ti" onclick="sw('pf',this)">🎯 Performance</div>
-    <div class="ti" onclick="sw('vl',this)">📊 Volatility</div>
-    <div class="ti" onclick="sw('cr',this)">🔗 Correlation</div>
-    <div class="ti" onclick="sw('sn',this)">🌿 Seasonality</div>
-    <div class="ti" onclick="sw('sg',this)">⚡ Signals</div>
+
+    <!-- Toggle header -->
+    <div id="comm-toggle" onclick="togglePanel()">
+      <span id="comm-chevron">▶</span>
+      <span id="comm-toggle-label">Select commodities</span>
+      <span id="sel-badge">0 selected</span>
+    </div>
+
+    <!-- Selected chips (always visible) -->
+    <div id="sel-chips"></div>
+    <div id="no-sel-hint">Click above to browse commodities</div>
+
+    <!-- Collapsible panel (hidden by default) -->
+    <div id="comm-panel">
+      <div id="search-wrap">
+        <span id="search-icon">🔍</span>
+        <input id="comm-search" type="text" placeholder="Search commodities…"
+          oninput="filterList(this.value)" onkeydown="searchKeydown(event)">
+        <span id="search-clear" onclick="clearSearch()">✕</span>
+      </div>
+      <div id="srch-meta">
+        <span id="srch-count"></span>
+        <span id="srch-add-all" onclick="addAllVisible()">+ Add all visible</span>
+      </div>
+      <div id="srch-none">No matches found</div>
+      <div id="clist"><div class="load" style="height:60px;font-size:12px">Loading…</div></div>
+    </div>
+
+    <!-- Analysis view (always visible, pushed to bottom) -->
+    <div id="analysis-section">
+      <hr class="adiv">
+      <div class="sl">Analysis view</div>
+      <div class="ti on" onclick="sw('ov',this)">📈 Overview</div>
+      <div class="ti" onclick="sw('pf',this)">🎯 Performance</div>
+      <div class="ti" onclick="sw('vl',this)">📊 Volatility</div>
+      <div class="ti" onclick="sw('cr',this)">🔗 Correlation</div>
+      <div class="ti" onclick="sw('sn',this)">🌿 Seasonality</div>
+      <div class="ti" onclick="sw('sg',this)">⚡ Signals</div>
+    </div>
   </div>
 
+  <!-- ── Main content ───────────────────────────────────────────────────────── -->
   <div id="main">
     <div id="mrow"></div>
     <div id="ccard">
       <div class="load" id="ldmsg">⏳ Loading commodity data…</div>
+
+      <!-- Empty state (shown when no commodity selected) -->
+      <div id="empty-state">
+        <div class="eicon">📊</div>
+        <div class="etitle">No commodity selected</div>
+        <div class="esub">Open the sidebar to browse 537 commodities</div>
+        <div class="eaction" onclick="togglePanel()">▶ Select commodities</div>
+      </div>
 
       <div id="ov" class="panel on">
         <div class="ct">Price history (CNY/ton)</div>
         <div id="ch-ov"></div>
       </div>
       <div id="pf" class="panel">
-        <div class="ct">Rebased price index (Jan 2024 = 100)</div>
+        <div class="ct">Rebased price index</div>
         <div class="cd2">Resets all prices to 100 at series start — fair comparison regardless of absolute price levels.</div>
         <div id="ch-pf"></div>
       </div>
       <div id="vl" class="panel">
         <div class="ct">30-day rolling volatility (%)</div>
-        <div class="cd2">Standard deviation of daily returns over a 30-day window. Higher = more price risk.</div>
+        <div class="cd2">Standard deviation of daily returns. Higher = more price risk.</div>
         <div id="ch-vl"></div>
       </div>
       <div id="cr" class="panel">
@@ -140,7 +252,7 @@ hr.div{border:none;border-top:.5px solid var(--bd);margin:10px 0}
       </div>
       <div id="sg" class="panel">
         <div class="ct" id="sgt">⚡ Procurement signal</div>
-        <div class="note na">⚠ Heuristic only — for procurement planning context. Validate with fundamental analysis.</div>
+        <div class="note na">⚠ Heuristic only — validate with fundamental analysis.</div>
         <div class="scards">
           <div id="sb"></div>
           <div class="mc" style="flex:none"><div class="ml">MA 20</div><div class="mv" id="sm20">—</div></div>
@@ -154,41 +266,38 @@ hr.div{border:none;border-top:.5px solid var(--bd);margin:10px 0}
 </div>
 
 <script>
-/* ── Theme ──────────────────────────────────────────────────────────────────── */
+/* ── Theme ─────────────────────────────────────────────────────────────────── */
 function getTheme(){return document.documentElement.getAttribute('data-theme')||'dark'}
 function setTheme(t){
   document.documentElement.setAttribute('data-theme',t);
   localStorage.setItem('theme',t);
-  const btn=document.getElementById('theme-btn');
-  btn.textContent=t==='dark'?'☀️ Light mode':'🌙 Dark mode';
-  if(window.D)render();
+  document.getElementById('theme-btn').textContent=t==='dark'?'☀️ Light mode':'🌙 Dark mode';
+  if(window.D&&SEL.length)render();
 }
 function toggleTheme(){setTheme(getTheme()==='dark'?'light':'dark')}
-// Restore saved preference
 setTheme(localStorage.getItem('theme')||'dark');
 
-/* ── Plotly layout (theme-aware) ─────────────────────────────────────────────── */
+/* ── Plotly ─────────────────────────────────────────────────────────────────── */
 const COLS=["#3B82F6","#10B981","#F97316","#A855F7","#EF4444","#F59E0B","#06B6D4","#EC4899","#84CC16","#6366F1"];
 const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const CFG={responsive:true,displayModeBar:false};
 
 function getLB(){
-  const light=getTheme()==='light';
+  const l=getTheme()==='light';
   return{
-    paper_bgcolor:light?'#FFFFFF':'#161B27',
-    plot_bgcolor :light?'#FFFFFF':'#161B27',
-    font:{color:light?'#718096':'#8892B0',size:10,family:'system-ui'},
+    paper_bgcolor:l?'#FFFFFF':'#161B27',plot_bgcolor:l?'#FFFFFF':'#161B27',
+    font:{color:l?'#718096':'#8892B0',size:10,family:'system-ui'},
     margin:{t:10,r:16,b:38,l:72},
-    xaxis:{gridcolor:light?'#E2E8F0':'#2D3446',linecolor:light?'#E2E8F0':'#2D3446',tickfont:{size:9}},
-    yaxis:{gridcolor:light?'#E2E8F0':'#2D3446',linecolor:light?'#E2E8F0':'#2D3446',tickfont:{size:9}},
+    xaxis:{gridcolor:l?'#E2E8F0':'#2D3446',linecolor:l?'#E2E8F0':'#2D3446',tickfont:{size:9}},
+    yaxis:{gridcolor:l?'#E2E8F0':'#2D3446',linecolor:l?'#E2E8F0':'#2D3446',tickfont:{size:9}},
     legend:{bgcolor:'transparent',font:{size:10}},
     hovermode:'x unified',
-    hoverlabel:{bgcolor:light?'#FFFFFF':'#1E2433',bordercolor:light?'#E2E8F0':'#2D3446',font:{size:10}},
+    hoverlabel:{bgcolor:l?'#FFFFFF':'#1E2433',bordercolor:l?'#E2E8F0':'#2D3446',font:{size:10}},
   };
 }
 
-/* ── State ───────────────────────────────────────────────────────────────────── */
-let D=null, SEL=[], TAB='ov';
+/* ── State ─────────────────────────────────────────────────────────────────── */
+let D=null, SEL=[], TAB='ov', panelOpen=false, currentQuery='';
 const CC={};
 
 const fmt =(n,d=0)=>n==null?'—':n.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
@@ -199,27 +308,65 @@ function rStd(a,w=30){return a.map((_,i)=>{if(i<w)return null;const s=a.slice(i-
 function pearson(x,y){const n=x.length,mx=x.reduce((a,b)=>a+b)/n,my=y.reduce((a,b)=>a+b)/n,num=x.reduce((s,xi,i)=>s+(xi-mx)*(y[i]-my),0),den=Math.sqrt(x.reduce((s,xi)=>s+(xi-mx)**2)*y.reduce((s,yi)=>s+(yi-my)**2));return den===0?0:num/den}
 function maArr(p,w){return p.map((_,i)=>i<w-1?null:p.slice(i-w+1,i+1).reduce((a,b)=>a+b)/w)}
 
-/* ── Bootstrap ───────────────────────────────────────────────────────────────── */
+/* ── Bootstrap ─────────────────────────────────────────────────────────────── */
 async function init(){
   try{
     const r=await fetch('data/commodities.json');
-    if(!r.ok)throw new Error(`Cannot load data/commodities.json (${r.status}). Run the workflow first.`);
+    if(!r.ok)throw new Error(`Cannot load data/commodities.json (${r.status})`);
     D=await r.json();
     D.commodities.forEach((c,i)=>{CC[c]=COLS[i%COLS.length]});
-    SEL=D.commodities.slice(0,3);
+    SEL=[];  // ← start empty — user picks what they want
     document.getElementById('hs').textContent=
       `${D.meta.period_from} – ${D.meta.period_to} · ${D.meta.source} · ${D.meta.total_commodities} commodities`;
     document.getElementById('upd').textContent=`Updated: ${D.meta.last_updated}`;
-    buildList(); updateMetrics();
+    document.getElementById('comm-search').placeholder=`Search ${D.commodities.length} commodities…`;
+    buildList(); buildChips(); updateMetrics();
     document.getElementById('ldmsg').style.display='none';
     render();
   }catch(e){
     document.getElementById('ldmsg').textContent='❌ '+e.message;
-    console.error(e);
   }
 }
 
-/* ── Sidebar ─────────────────────────────────────────────────────────────────── */
+/* ── Collapsible panel ──────────────────────────────────────────────────────── */
+function togglePanel(){
+  panelOpen=!panelOpen;
+  document.getElementById('comm-panel').classList.toggle('open',panelOpen);
+  document.getElementById('comm-chevron').textContent=panelOpen?'▼':'▶';
+}
+
+/* ── Selected chips ─────────────────────────────────────────────────────────── */
+function buildChips(){
+  const el=document.getElementById('sel-chips');
+  el.innerHTML='';
+  const badge=document.getElementById('sel-badge');
+  const hint=document.getElementById('no-sel-hint');
+  badge.textContent=SEL.length?`${SEL.length} selected`:'0 selected';
+  hint.style.display=SEL.length?'none':'block';
+  SEL.forEach(c=>{
+    const d=document.createElement('div');
+    d.className='chip';
+    d.style.setProperty('--chip-c',CC[c]);
+    d.innerHTML=`<span class="chip-name" title="${c}">${c}</span>`
+      +`<span class="chip-x" onclick="removeChip(event,'${c.replace(/'/g,"\\'")}')" title="Remove">×</span>`;
+    el.appendChild(d);
+  });
+}
+
+function removeChip(e,c){
+  e.stopPropagation();
+  SEL=SEL.filter(x=>x!==c);
+  buildChips(); buildList(); updateMetrics(); render();
+}
+
+/* ── Commodity list ─────────────────────────────────────────────────────────── */
+function highlight(text,q){
+  if(!q)return text;
+  const i=text.toLowerCase().indexOf(q.toLowerCase());
+  if(i===-1)return text;
+  return text.slice(0,i)+'<mark>'+text.slice(i,i+q.length)+'</mark>'+text.slice(i+q.length);
+}
+
 function buildList(){
   const el=document.getElementById('clist');el.innerHTML='';
   D.commodities.forEach(c=>{
@@ -227,49 +374,112 @@ function buildList(){
     const d=document.createElement('div');
     d.className='ci'+(on?' on':'');
     d.style.setProperty('--cc',col);
-    const m=getMetric(c);
-    d.innerHTML=`<div class="cd"></div><div><div class="cn">${c}</div>${on&&m?`<div class="cc2" style="color:${m.dc>=0?'var(--gr)':'var(--rd)'}">${fpct(m.dc)} today</div>`:''}</div>`;
+    const m=on?getMetric(c):null;
+    d.innerHTML=`<div class="cdot"></div><div><div class="cn">${highlight(c,currentQuery)}</div>`
+      +(on&&m?`<div class="cc2" style="color:${m.dc>=0?'var(--gr)':'var(--rd)'}">${fpct(m.dc)} today</div>`:'')+`</div>`;
     d.onclick=()=>toggle(c);
     el.appendChild(d);
   });
+  if(currentQuery)filterList(currentQuery);
 }
 
 function toggle(c){
-  SEL=SEL.includes(c)?(SEL.length>1?SEL.filter(x=>x!==c):SEL):[...SEL,c];
-  buildList(); updateMetrics(); render();
+  SEL=SEL.includes(c)?SEL.filter(x=>x!==c):[...SEL,c]; // ← no min-1 guard → empty is allowed
+  buildChips(); buildList(); updateMetrics(); render();
 }
 
-/* ── Metrics row ─────────────────────────────────────────────────────────────── */
+/* ── Search ─────────────────────────────────────────────────────────────────── */
+function filterList(q){
+  currentQuery=q.trim();
+  const query=currentQuery.toLowerCase();
+  const clearBtn=document.getElementById('search-clear');
+  const meta=document.getElementById('srch-meta');
+  const countEl=document.getElementById('srch-count');
+  const noneEl=document.getElementById('srch-none');
+  clearBtn.style.display=query?'block':'none';
+  if(!query){
+    document.querySelectorAll('.ci').forEach(el=>{
+      el.style.display='';
+      const cn=el.querySelector('.cn');
+      if(cn)cn.innerHTML=cn.textContent;
+    });
+    meta.style.display='none';noneEl.style.display='none';return;
+  }
+  let vis=0;
+  document.querySelectorAll('.ci').forEach(el=>{
+    const cn=el.querySelector('.cn');
+    const name=cn?cn.textContent:'';
+    const match=name.toLowerCase().includes(query);
+    el.style.display=match?'':'none';
+    if(match){vis++;if(cn)cn.innerHTML=highlight(name,currentQuery);}
+  });
+  countEl.textContent=`${vis} of ${D.commodities.length}`;
+  meta.style.display='flex';noneEl.style.display=vis===0?'block':'none';
+}
+
+function clearSearch(){
+  const inp=document.getElementById('comm-search');
+  inp.value='';filterList('');inp.focus();
+}
+
+function searchKeydown(e){
+  if(e.key!=='Enter')return;
+  const first=Array.from(document.querySelectorAll('.ci'))
+    .find(el=>el.style.display!=='none'&&!el.classList.contains('on'));
+  if(first)first.click();
+}
+
+function addAllVisible(){
+  document.querySelectorAll('.ci').forEach(el=>{
+    if(el.style.display!=='none'&&!el.classList.contains('on')){
+      const name=el.querySelector('.cn')?.textContent;
+      if(name&&!SEL.includes(name))SEL.push(name);
+    }
+  });
+  buildChips();buildList();updateMetrics();render();
+}
+
+/* ── Metrics row ────────────────────────────────────────────────────────────── */
 function getMetric(c){
   const s=D.series[c],p=s.current_price,n=p.length;
   if(!n)return null;
   const cur=p[n-1],prev=p[n-2]??cur,first=p[0];
   return{cur,dc:(cur-prev)/prev*100,tr:(cur-first)/first*100};
 }
-
 function updateMetrics(){
   const el=document.getElementById('mrow');el.innerHTML='';
   SEL.forEach(c=>{
     const m=getMetric(c);if(!m)return;
     const col=m.dc>=0?'var(--gr)':'var(--rd)';
     const d=document.createElement('div');d.className='mc';
-    d.innerHTML=`<div class="ml">${c}</div><div class="mv">${fmt(m.cur)}</div><div class="ms" style="color:${col}">${fpct(m.dc)} today · ${fpct(m.tr)} total</div>`;
+    d.innerHTML=`<div class="ml">${c}</div><div class="mv">${fmt(m.cur)}</div>`
+      +`<div class="ms" style="color:${col}">${fpct(m.dc)} today · ${fpct(m.tr)} total</div>`;
     el.appendChild(d);
   });
 }
 
-/* ── Tab switching ───────────────────────────────────────────────────────────── */
+/* ── Tab switching ──────────────────────────────────────────────────────────── */
 function sw(id,el){
   document.querySelectorAll('.ti').forEach(t=>t.classList.remove('on'));el.classList.add('on');
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('on'));document.getElementById(id).classList.add('on');
-  TAB=id; render();
+  TAB=id;render();
+}
+function h(){return Math.max(280,Math.floor(window.innerHeight*0.58))}
+
+/* ── Render ─────────────────────────────────────────────────────────────────── */
+function showEmpty(show){
+  document.getElementById('empty-state').style.display=show?'flex':'none';
+  document.querySelectorAll('.panel').forEach(p=>{
+    if(show)p.classList.remove('on');
+    else if(p.id===TAB)p.classList.add('on');
+  });
 }
 
-function h(){return Math.max(280,Math.floor(window.innerHeight*0.55))}
-
-/* ── Render ──────────────────────────────────────────────────────────────────── */
 function render(){
   if(!D)return;
+  if(SEL.length===0){showEmpty(true);return;}
+  showEmpty(false);
+  document.getElementById(TAB)?.classList.add('on');
   const fns={ov:rOv,pf:rPf,vl:rVl,cr:rCr,sn:rSn,sg:rSg};
   if(fns[TAB])fns[TAB]();
 }
@@ -280,7 +490,6 @@ function rOv(){
     type:'scatter',mode:'lines',name:c,line:{color:CC[c],width:1.5}
   })),{...getLB(),yaxis:{...getLB().yaxis,title:'CNY/ton'},height:h()},CFG);
 }
-
 function rPf(){
   Plotly.react('ch-pf',SEL.map(c=>{
     const p=D.series[c].current_price,f=p[0];
@@ -291,7 +500,6 @@ function rPf(){
     shapes:[{type:'line',x0:0,x1:1,xref:'paper',y0:100,y1:100,line:{color:'#2D3446',dash:'dot'}}],
     height:h()},CFG);
 }
-
 function rVl(){
   Plotly.react('ch-vl',SEL.map(c=>{
     const v=rStd(rets(D.series[c].current_price),30);
@@ -299,25 +507,22 @@ function rVl(){
       fill:'tozeroy',line:{color:CC[c],width:1.5},fillcolor:CC[c]+'18'};
   }),{...getLB(),yaxis:{...getLB().yaxis,title:'Std of daily returns (%)'},height:h()},CFG);
 }
-
 function rCr(){
   if(SEL.length<2){
-    document.getElementById('ch-cr').innerHTML='<div class="load">Select at least 2 commodities</div>';
-    return;
+    document.getElementById('ch-cr').innerHTML='<div class="load">Select at least 2 commodities to see correlation</div>';return;
   }
   const rs=Object.fromEntries(SEL.map(c=>[c,rets(D.series[c].current_price)]));
   const z=SEL.map(a=>SEL.map(b=>+pearson(rs[a],rs[b]).toFixed(3)));
   const lb=SEL.map(c=>c.split(' ').slice(0,2).join(' '));
+  const l=getTheme()==='light';
   Plotly.react('ch-cr',[{
     type:'heatmap',z,x:lb,y:lb,
-    colorscale:[[0,'#EF4444'],[0.5,getTheme()==='light'?'#F7FAFC':'#161B27'],[1,'#3B82F6']],
-    zmin:-1,zmax:1,
-    text:z.map(r=>r.map(v=>v.toFixed(2))),
+    colorscale:[[0,'#EF4444'],[0.5,l?'#F7FAFC':'#161B27'],[1,'#3B82F6']],
+    zmin:-1,zmax:1,text:z.map(r=>r.map(v=>v.toFixed(2))),
     texttemplate:'<b>%{text}</b>',
     hovertemplate:'%{y} × %{x}: <b>%{z}</b><extra></extra>',
   }],{...getLB(),margin:{t:20,r:20,b:90,l:110},height:h()},CFG);
 }
-
 function rSn(){
   Plotly.react('ch-sn',SEL.map(c=>{
     const su=new Array(12).fill(0),co=new Array(12).fill(0);
@@ -326,7 +531,6 @@ function rSn(){
       type:'bar',name:c,marker:{color:CC[c],opacity:0.85}};
   }),{...getLB(),barmode:'group',yaxis:{...getLB().yaxis,title:'Avg price (CNY/ton)'},height:h()},CFG);
 }
-
 function rSg(){
   const c=SEL[0],s=D.series[c],p=s.current_price,dt=s.dates;
   const m20=maArr(p,20),m50=maArr(p,50);
@@ -342,13 +546,13 @@ function rSg(){
     +`background:${buy?'#10B98118':'#EF444418'};color:${buy?'var(--gr)':'var(--rd)'};`
     +`border:1px solid ${buy?'#10B98140':'#EF444440'}`;
   Plotly.react('ch-sg',[
-    {x:dt,y:p,  type:'scatter',mode:'lines',name:c,    line:{color:CC[c],   width:1},opacity:0.4},
-    {x:dt,y:m20,type:'scatter',mode:'lines',name:'MA 20',line:{color:'#F59E0B',width:1.5,dash:'dot'}},
-    {x:dt,y:m50,type:'scatter',mode:'lines',name:'MA 50',line:{color:'#A855F7',width:2}},
+    {x:dt,y:p,   type:'scatter',mode:'lines',name:c,     line:{color:CC[c],    width:1  },opacity:0.4},
+    {x:dt,y:m20, type:'scatter',mode:'lines',name:'MA 20',line:{color:'#F59E0B',width:1.5,dash:'dot'}},
+    {x:dt,y:m50, type:'scatter',mode:'lines',name:'MA 50',line:{color:'#A855F7',width:2  }},
   ],{...getLB(),yaxis:{...getLB().yaxis,title:'CNY/ton'},height:h()-60},CFG);
 }
 
-window.addEventListener('resize',()=>render());
+window.addEventListener('resize',()=>{if(SEL.length)render()});
 init();
 </script>
 </body>
