@@ -3,6 +3,8 @@
 Automated daily pipeline that scrapes commodity prices from [SunSirs](https://sunsirs.com/uk/) and delivers a dashboard evryday (Vietnam time, UTC+7). Try the dashboard [here](https://ftu-kudo.github.io/Commodity_dashboard/).
 
 ---
+## ✅ Example Graph
+<img width="1854" height="881" alt="image" src="https://github.com/user-attachments/assets/5bb19f71-47f8-40fa-8198-a0175732f1ae" />
 
 ## ✨ Features
 -  **Various commodity prices** — More than 500 commodity prices are updated daily
